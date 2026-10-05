@@ -108,6 +108,9 @@ check('gas: APP_TOKEN mismatch → forbidden', g.post(msg()).error.code === 'for
 g = gasSandbox({ statuses: [404, 200] });
 r = g.post(msg());
 check('gas: gemini-flash-latest 404 → fallback to gemini-3.5-flash-lite', r.ok && r.model === 'gemini-3.5-flash-lite' && g.fetches[1].url.includes('gemini-3.5-flash-lite'));
+check('gas: fallback reply names the skipped model + HTTP status only', JSON.stringify(r.skipped) === JSON.stringify([{ model: 'gemini-flash-latest', status: 404 }]));
+g = gasSandbox({ statuses: [200] }); r = g.post(msg());
+check('gas: no skipped field when the primary works', r.ok && r.model === 'gemini-flash-latest' && !('skipped' in r));
 g = gasSandbox({ statuses: [429] });
 check('gas: Gemini 429 → quota', g.post(msg()).error.code === 'quota');
 g = gasSandbox({ statuses: [400] });

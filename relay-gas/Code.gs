@@ -87,10 +87,11 @@ function doPost(e) {
     if (limit) return fail_('quota', limit);
 
     var models = model === MODEL_PRIMARY ? [MODEL_PRIMARY, MODEL_FALLBACK] : [model];
-    var last = null;
+    var last = null, skipped = [];
     for (var i = 0; i < models.length; i++) {
       var res = callGemini_(models[i], v.body, key);
-      if (res.ok) return reply_({ ok: true, model: models[i], data: res.data });
+      if (res.ok) return reply_(skipped.length ? { ok: true, model: models[i], skipped: skipped, data: res.data } : { ok: true, model: models[i], data: res.data });
+      skipped.push({ model: models[i], status: res.status || 0 });   // HTTP status only, never Google's text
       last = res;
       if (!res.tryFallback) break;
     }
@@ -217,10 +218,14 @@ function callGemini_(model, body, key) {
   var status = resp.getResponseCode();
   var text = resp.getContentText();
   if (status === 200) {
-    try { return { ok: true, data: JSON.parse(text) }; } catch (err) { return { ok: false, code: 'upstream', messageKey: 'upstream', tryFallback: false }; }
+    try { return { ok: true, data: JSON.parse(text) }; } catch (err) { return { ok: false, status: status, code: 'upstream', messageKey: 'upstream', tryFallback: false }; }
   }
   // Never pass Google's raw error text to the client (it can mention the project or key).
   console.warn('gemini ' + model + ' -> ' + status);
+  var r = callGeminiError_(status, text); r.status = status; return r;
+}
+
+function callGeminiError_(status, text) {
   if (status === 429) return { ok: false, code: 'quota', messageKey: 'quota', tryFallback: false };
   if (status === 401 || status === 403 || (status === 400 && /api key|API_KEY/i.test(text))) return { ok: false, code: 'upstream', messageKey: 'upstream_auth', tryFallback: false };
   if (status === 404 || status >= 500) return { ok: false, code: 'upstream', messageKey: 'upstream', tryFallback: true };

@@ -214,7 +214,7 @@ with sync_playwright() as p:
         srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), h); threading.Thread(target=srv.serve_forever, daemon=True).start(); return srv.server_address[1]
     exec_port, echo_port = start(Exec), start(Echo)
     ctx = browser.new_context(bypass_csp=True)   # the real CSP allows script.google.com / script.googleusercontent.com
-    pg = ctx.new_page(); pg.goto(BASE)
+    pg = ctx.new_page(); pg.goto(serve())   # always a local http page (an https page can't call these http test servers)
     out = pg.evaluate("""async (url) => { const m = await import('./ai.js'); return m.postAppsScript(url, { v: 1, model: 'gemini-2.5-flash', request: {}, clientId: 'abcdef123456' }); }""", f'http://127.0.0.1:{exec_port}/macros/s/X/exec')
     check('apps script redirect: fetch follows the 302 cross-origin and reads JSON', out == {'echo': 'gemini-2.5-flash'}, str(out))
     check('apps script redirect: no CORS preflight (text/plain simple request)', hits['options'] == 0 and hits['post'] == 1 and hits['get'] == 1 and hits['ct'].startswith('text/plain'), str(hits))

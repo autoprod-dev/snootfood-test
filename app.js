@@ -44,8 +44,10 @@ const COPY = {
 };
 
 const DEMO_BANNER = {
-  fridge: 'These are sample ingredients, not what’s in your fridge. Real photo reading kicks in once the AI key is hooked up.',
-  other: 'This is a sample take, not a read of your photo. Real photo reading kicks in once the AI key is hooked up.',
+  fridge: 'These are sample ingredients, not what’s in your fridge.',
+  other: 'This is a sample take, not a read of your photo.',
+  live: ' Snap your own photo and tap “Get Chef’s real take” for the real thing.',
+  off: ' Real photo reading kicks in once the AI key is hooked up.',
 };
 
 const QUALITY_WARNING = {
@@ -396,7 +398,7 @@ function showResult() {
   p.replaceChildren();
   if (state.source === 'demo') {
     const banner = el('div', 'demo-banner'); banner.setAttribute('role', 'note');
-    banner.append(el('strong', null, 'Heads up: demo result! '), DEMO_BANNER[state.mode === 'fridge' ? 'fridge' : 'other']);
+    banner.append(el('strong', null, 'Heads up: demo result! '), DEMO_BANNER[state.mode === 'fridge' ? 'fridge' : 'other'] + (aiProvider() ? DEMO_BANNER.live : DEMO_BANNER.off));
     p.append(banner);
   }
   const eyebrow = el('p', 'eyebrow', state.mode === 'fridge' && state.source === 'ai' ? 'Step 2 of 2 · Tonight’s Special' : COPY[state.mode].eyebrow);

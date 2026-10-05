@@ -113,16 +113,35 @@ function grain(ctx, W, H, alpha, colour = '0,0,0', count = 6000) {
   for (let i = 0; i < count; i++) ctx.fillRect(rnd() * W, rnd() * H, 1.6, 1.6);
 }
 
-function footer(ctx, W, H, { ink, sub }) {
-  const y = H - 124;
+// Layout (QW4). Story cards keep the bottom 360 px (y ≥ 1560) as plain background: that's where Instagram/TikTok
+// put the reply bar and where people drop a link sticker. Feed cards just clear the watermark.
+const FOOTER_H = 112;                                    // three watermark lines
+const footerY = (H, story) => story ? H - 360 - FOOTER_H - 8 : H - 164;
+export const contentBottom = (H, story) => footerY(H, story) - 20;
+export const STORY_SAFE_Y = 1560;
+
+function footer(ctx, W, H, { ink, sub, accent }, opts = {}) {
+  const y = footerY(H, opts.story);
   const url = APP.shortUrl + (APP.isTest ? '  ·  TEST' : '');
-  ctx.font = `800 30px ${SERIF}`; const w1 = ctx.measureText(APP.name).width;
-  ctx.font = `500 22px ${SERIF}`; const w2 = ctx.measureText(url).width;
-  const x = W / 2 - (60 + Math.max(w1, w2)) / 2;
-  if (chefImg?.complete) ctx.drawImage(chefImg, x, y - 2, 46, 55);
+  const tag = `#ChefGerardo  ·  Get roasted →`;
+  ctx.font = `800 34px ${SERIF}`; const w1 = ctx.measureText(APP.name).width;
+  ctx.font = `600 30px ${SERIF}`; const w2 = ctx.measureText(url).width;
+  ctx.font = `700 24px ${SERIF}`; const w3 = ctx.measureText(tag).width;
+  const x = W / 2 - (84 + Math.max(w1, w2, w3)) / 2;
+  if (chefImg?.complete) ctx.drawImage(chefImg, x, y + 8, 66, 79);
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillStyle = ink; ctx.font = `800 30px ${SERIF}`; ctx.fillText(APP.name, x + 60, y);
-  ctx.fillStyle = sub; ctx.font = `500 22px ${SERIF}`; ctx.fillText(url, x + 60, y + 36);
+  ctx.fillStyle = ink; ctx.font = `800 34px ${SERIF}`; ctx.fillText(APP.name, x + 84, y);
+  ctx.fillStyle = sub; ctx.font = `600 30px ${SERIF}`; ctx.fillText(url, x + 84, y + 42);
+  ctx.fillStyle = accent || ink; ctx.font = `700 24px ${SERIF}`; ctx.fillText(tag, x + 84, y + 82);
+}
+
+// Honest label when the card is a demo take of the user's own photo (not a real read).
+function demoTag(ctx, W, colour, bg) {
+  ctx.save(); ctx.font = `800 20px ${SERIF}`;
+  const t = 'DEMO TAKE', w = ctx.measureText(t).width + 30;
+  roundRect(ctx, W - 64 - w, 62, w, 34, 17); ctx.fillStyle = bg; ctx.fill();
+  ctx.fillStyle = colour; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, W - 64 - w / 2, 80);
+  ctx.restore();
 }
 
 function ornament(ctx, cx, y, w, colour) {
@@ -162,8 +181,8 @@ function menuCard(ctx, W, H, r, photo, opts = {}) {
   const notes = fit(ctx, '“' + r.chefNotes + '”', (s) => `italic 500 ${s}px ${SERIF}`, tw - 40, 3, 28, 22);
   const pair = fit(ctx, 'Pair it with: ' + r.pairing, (s) => `600 ${s}px ${SERIF}`, tw, 2, 24, 20);
   const textH = name.lines.length * name.lh + 22 + desc.lines.length * desc.lh + 30 + 76 + 26 + 34 + notes.lines.length * notes.lh + 18 + pair.lines.length * pair.lh;
-  const top = 222, bottom = H - 150;
-  const photoH = Math.max(320, Math.min(H > 1500 ? 900 : 560, bottom - top - textH - 60));
+  const top = 222, bottom = contentBottom(H, opts.story);
+  const photoH = Math.max(280, Math.min(H > 1500 ? 900 : 560, bottom - top - textH - 60));
   const photoW = Math.min(W - 240, photoH * 1.05);
   const px = (W - photoW) / 2, py = top;
 
@@ -193,7 +212,8 @@ function menuCard(ctx, W, H, r, photo, opts = {}) {
   y = drawLines(ctx, notes, (s) => `italic 500 ${s}px ${SERIF}`, W / 2, y) + 18;
   ctx.fillStyle = '#6b5446';
   drawLines(ctx, pair, (s) => `600 ${s}px ${SERIF}`, W / 2, y);
-  footer(ctx, W, H, { ink: '#2a1f1a', sub: '#7a6656' });
+  footer(ctx, W, H, { ink: '#2a1f1a', sub: '#7a6656', accent: '#8c1c13' }, opts);
+  if (opts.demo) demoTag(ctx, W, '#fbf6ea', '#8a6d3b');
 }
 
 // ───────────── Chef Roast ─────────────
@@ -215,7 +235,7 @@ function roastCard(ctx, W, H, r, photo, opts = {}) {
   const comp = fit(ctx, '✓ ' + r.compliment, (s) => `600 ${s}px ${SERIF}`, tw, 2, 26, 20);
   const fix = fit(ctx, 'Pro tip: ' + r.fix, (s) => `600 ${s}px ${SERIF}`, tw, 2, 26, 20);
   const textH = head.lines.length * head.lh + 26 + roast.lines.length * roast.lh + 26 + (comp.lines.length * comp.lh) + 10 + fix.lines.length * fix.lh;
-  const top = 190, bottom = H - 150;
+  const top = 190, bottom = contentBottom(H, opts.story);
   const photoH = Math.max(300, Math.min(H > 1500 ? 860 : 500, bottom - top - textH - 110));
   const photoW = Math.min(W - 260, photoH * 1.2);
 
@@ -251,7 +271,8 @@ function roastCard(ctx, W, H, r, photo, opts = {}) {
   y = drawLines(ctx, comp, (s) => `600 ${s}px ${SERIF}`, W / 2, y) + 10;
   ctx.fillStyle = '#f2c46d';
   drawLines(ctx, fix, (s) => `600 ${s}px ${SERIF}`, W / 2, y);
-  footer(ctx, W, H, { ink: '#ffffff', sub: '#b9a99a' });
+  footer(ctx, W, H, { ink: '#ffffff', sub: '#d8c9ba', accent: '#ff7a5c' }, opts);
+  if (opts.demo) demoTag(ctx, W, '#16100e', '#f3e9dc');
 }
 
 // "You beat your friend 7 vs 4" sticker for challenge answers (QW3)
@@ -297,7 +318,7 @@ function fridgeCard(ctx, W, H, r, photo, opts = {}) {
   const note = fit(ctx, '“' + r.note + '”', (s) => `italic 500 ${s}px ${SERIF}`, tw, 2, 26, 20);
   const stepsH = steps.reduce((s, b) => s + b.lines.length * b.lh + 4, 0);
   const textH = name.lines.length * name.lh + 18 + desc.lines.length * desc.lh + 20 + ingr.lines.length * ingr.lh + 18 + stepsH + 18 + note.lines.length * note.lh;
-  const top = 222, bottom = H - 150;
+  const top = 222, bottom = contentBottom(H, opts.story);
   const photoH = Math.max(280, Math.min(H > 1500 ? 820 : 450, bottom - top - textH - 50));
   const photoW = Math.min(W - 300, photoH * 1.25);
   const px = (W - photoW) / 2, py = top;
@@ -313,9 +334,9 @@ function fridgeCard(ctx, W, H, r, photo, opts = {}) {
   ctx.restore();
 
   // Price tag
-  ctx.save(); ctx.translate(px + photoW + 10, py + photoH - 30); ctx.rotate(-0.12);
   ctx.font = `800 40px ${SERIF}`;
   const tagW = Math.max(150, ctx.measureText(r.price).width + 50);
+  ctx.save(); ctx.translate(Math.min(px + photoW + 10, W - 56 - tagW / 2), py + photoH - 30); ctx.rotate(-0.12);
   roundRect(ctx, -tagW / 2, -40, tagW, 80, 40); ctx.fillStyle = '#f2c14e'; ctx.fill();
   ctx.fillStyle = '#2a1f1a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(r.price, 0, 2);
   ctx.restore();
@@ -333,7 +354,8 @@ function fridgeCard(ctx, W, H, r, photo, opts = {}) {
   y += 14;
   ctx.fillStyle = '#b9d3c1';
   drawLines(ctx, note, (s) => `italic 500 ${s}px ${SERIF}`, W / 2, y);
-  footer(ctx, W, H, { ink: chalk, sub: '#b9d3c1' });
+  footer(ctx, W, H, { ink: chalk, sub: '#cfe3d4', accent: '#f2c14e' }, opts);
+  if (opts.demo) demoTag(ctx, W, '#1e352b', '#f4f1e8');
 }
 
 export async function renderCard(mode, result, photo, opts = {}) {

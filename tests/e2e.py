@@ -387,6 +387,27 @@ with sync_playwright() as p:
     check('no alert() from URL params', not dialogs, str(dialogs))
     errs += serrs; ctx.close()
 
+    # ── 11. QW4: story-safe cards + bolder watermark (rendered in the page, measured on pixels) ──
+    ctx = browser.new_context(**PHONE); pg = ctx.new_page(); pg.goto(BASE + 'robots.txt')
+    for mode, sample in (('menu', 'noodles'), ('roast', 'beans'), ('fridge', 'fridge')):
+        for story in (False, True):
+            for roll in (0, 1):
+                m = pg.evaluate('''async ([mode, sample, story, roll]) => { const c = await import('/card.js'); const d = await import('/demo.js');
+                  const img = new Image(); img.src = '/samples/' + sample + '.jpg'; await img.decode();
+                  const cv = await c.renderCard(mode, d.demoResult(mode, null, sample, roll), img, { story, demo: true, challenge: mode === 'roast' ? { mine: 7, theirs: 4 } : null });
+                  const x = cv.getContext('2d'), W = cv.width, H = cv.height;
+                  // biggest jump from the row's median, per row, over the inner area (skips the frame)
+                  const rowSpread = (y) => { const d = x.getImageData(60, y, W - 120, 1).data; const L = []; for (let i = 0; i < d.length; i += 4) L.push(d[i] * .3 + d[i + 1] * .59 + d[i + 2] * .11);
+                    const s = [...L].sort((a, b) => a - b), med = s[s.length >> 1]; return Math.max(...L.map((v) => Math.abs(v - med))); };
+                  let below = 0, footer = 0;
+                  if (story) for (let y = c.STORY_SAFE_Y + 4; y < H - 40; y += 3) below = Math.max(below, rowSpread(y));
+                  const fy = story ? 1440 : H - 164; for (let y = fy; y < fy + 110; y += 2) footer = Math.max(footer, rowSpread(y));
+                  return { W, H, below, footer, safe: c.STORY_SAFE_Y, bottom: c.contentBottom(H, story) }; }''', [mode, sample, story, roll])
+                tag = f'{mode} {"story" if story else "post"} #{roll}'
+                check(f'card {tag}: {m["W"]}×{m["H"]}, watermark drawn', (m['W'], m['H']) == (1080, 1920 if story else 1350) and m['footer'] > 80, str(m))
+                if story: check(f'card {tag}: no text below y={m["safe"]} (reply bar / link sticker zone)', m['below'] < 40 and m['bottom'] < m['safe'] - 112, str(m))
+    ctx.close()
+
     check('no console errors / page errors', not errs, ' | '.join(errs)[:500])
     browser.close()
 

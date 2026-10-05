@@ -430,7 +430,7 @@ function showResult() {
 // ───────── Share card ─────────
 const cardSize = () => document.querySelector('input[name=cardSize]:checked').value;
 async function prerenderCard() {
-  const opts = { story: cardSize() === 'story', challenge: challengeVs() };
+  const opts = { story: cardSize() === 'story', challenge: challengeVs(), demo: state.source === 'demo' && !state.sampleId };
   const key = JSON.stringify([state.mode, state.result, opts]);
   if (state.cardKey === key && state.card) return state.card;
   state.cardKey = key; state.card = null;

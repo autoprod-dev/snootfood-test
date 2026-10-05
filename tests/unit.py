@@ -153,6 +153,22 @@ with sync_playwright() as p:
     sw = (ROOT / 'sw.js').read_text()
     check('service worker caches the chef art', 'img/chef-gerardo-${n}.webp' in sw and all(n in sw for n in ('fancy-menu', 'chef-roast', 'fridge-chef')))
 
+    # ── QW1 budget: Pacific day, next reset, spend counting, kitchen closed ──
+    b = pg.evaluate('''async () => { const m = await import('/budget.js'); localStorage.clear();
+        const r = { day: m.pacificDay(new Date('2026-10-05T06:59:00Z')), day2: m.pacificDay(new Date('2026-10-05T07:01:00Z')),
+          reset: m.nextReset(new Date('2026-10-05T02:30:00Z')).toISOString(), resetW: m.nextReset(new Date('2026-01-10T20:00:00Z')).toISOString() };
+        r.b0 = m.budget(); r.b1 = m.spend(); m.spend(); r.b3 = m.spend(); r.closed0 = m.kitchenClosed(); m.closeKitchen(); r.closed1 = m.kitchenClosed();
+        localStorage.setItem('snootfood.budget.v1', JSON.stringify({ day: '2001-01-01', used: 99 })); r.stale = m.budget();
+        localStorage.setItem('snootfood.closed.v1', '2001-01-01'); r.closedStale = m.kitchenClosed();
+        r.age0 = m.ageOk(); m.setAge(true); r.age1 = m.ageOk(); localStorage.clear(); return r; }''')
+    check('pacificDay: PDT midnight is 07:00 UTC', b['day'] == '2026-10-04' and b['day2'] == '2026-10-05', str(b))
+    check('nextReset: next LA midnight (PDT and PST)', b['reset'] == '2026-10-05T07:00:00.000Z' and b['resetW'] == '2026-01-11T08:00:00.000Z', b['reset'] + ' ' + b['resetW'])
+    check('budget: 3 a day, spend counts down to 0', (b['b0']['left'], b['b1']['left'], b['b3']['left'], b['b3']['limit']) == (3, 2, 0, 3), str(b['b3']))
+    check('budget and closed state reset on a new Pacific day', b['stale']['used'] == 0 and b['stale']['left'] == 3 and not b['closedStale'])
+    check('kitchen closed flag and 18+ answer stored', not b['closed0'] and b['closed1'] and not b['age0'] and b['age1'])
+    sw2 = (ROOT / 'sw.js').read_text()
+    check('service worker caches budget.js', "'./budget.js'" in sw2 or '"./budget.js"' in sw2 or 'budget.js' in sw2)
+
     check('no page errors', not errs, ' | '.join(errs))
     browser.close()
 

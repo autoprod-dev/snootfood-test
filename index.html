@@ -47,6 +47,7 @@
   <div class="demo-pill" id="demoPill" role="status">
     <strong>DEMO MODE</strong> · sample results, not a read of your photo. <button type="button" class="link" data-open-settings>Add a free key</button> to get the real thing.
   </div>
+  <div class="kitchen-banner" id="kitchenBanner" role="status" hidden></div>
 
   <section class="intro" id="intro">
     <div class="speech">
@@ -57,7 +58,9 @@
       <p id="introLine" aria-live="polite"></p>
     </div>
 
-    <div class="capture">
+    <div class="teaser" id="teaser" hidden></div>
+
+    <div class="capture" id="capture">
       <label class="btn btn-primary btn-xl" for="cameraInput">
         <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
         <span id="snapLabel">Snap your meal</span>
@@ -81,6 +84,7 @@
     <p class="loading" id="loading" hidden></p>
     <p class="error" id="error" role="alert" hidden></p>
     <article class="panel" id="panel" hidden></article>
+    <p class="run-note" id="runNote" role="status" hidden></p>
     <div class="actions" id="actions" hidden>
       <button class="btn btn-primary btn-xl share-btn" id="shareBtn" type="button">
         <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M18 16a3 3 0 0 0-2.4 1.2l-6.7-3.4a3 3 0 0 0 0-1.6l6.7-3.4A3 3 0 1 0 15 7l-6.7 3.4a3 3 0 1 0 0 3.2L15 17a3 3 0 1 0 3-1z"/></svg>
@@ -138,6 +142,18 @@
     <div class="settings-actions">
       <button type="button" class="btn btn-ghost" id="forgetKey">Remove key</button>
       <button type="submit" class="btn btn-primary" id="saveSettings" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="ageGate" aria-labelledby="ageTitle">
+  <form method="dialog" class="age-form">
+    <img src="img/chef-gerardo-chef-roast.png" alt="" width="323" height="512" class="age-chef">
+    <h2 id="ageTitle">Quick check before Chef takes a look</h2>
+    <p>Real photo reading uses <span id="ageProvider">Google Gemini</span>, which is for adults (18+) only. Are you 18 or over?</p>
+    <div class="age-actions">
+      <button class="btn btn-primary" value="yes" id="ageYes">Yes, I’m 18+</button>
+      <button class="btn btn-ghost" value="no" id="ageNo">No, keep it demo</button>
     </div>
   </form>
 </dialog>

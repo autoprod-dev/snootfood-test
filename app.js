@@ -3,6 +3,7 @@ import { analyseImage, demoResult, SAMPLES } from './demo.js';
 import { PROVIDERS, RELAY_MODEL, analyse, AIError } from './ai.js';
 import { renderCard, canvasToBlob, prepareCardAssets } from './card.js';
 import { decodeImage, resizeTo, toJpeg, photoCheck, FRIDGE_EDGE, FRIDGE_QUALITY } from './image.js';
+import { budget, spend, kitchenClosed, closeKitchen, nextResetLocal, ageOk, setAge } from './budget.js';
 
 const $ = (s) => document.querySelector(s);
 const chefAlt = (mode) => `${APP.chef}, looking ${APP.chefArt[mode].mood}`;
@@ -70,7 +71,52 @@ const aiArgs = () => {
   return provider === 'relay' ? { provider, key: '', model: RELAY_MODEL } : { provider, key: activeKey(), model: settings.models[settings.provider] };
 };
 
-function refreshDemoPill() { $('#demoPill').hidden = usingAI(); }
+// The per-device daily budget and the kitchen-closed state only apply to the shared relay; your own key is your own quota.
+const budgeted = () => aiProvider() === 'relay';
+const callCost = (mode) => (mode === 'fridge' ? (state.fridge ? 1 : 2) : 1);   // fridge = scan + recipe
+function noAIReason(cost) {
+  if (!usingAI()) return 'off';
+  if (state.sampleId) return 'sample';
+  if (!budgeted()) return '';
+  if (kitchenClosed()) return 'closed';
+  if (budget().used + cost > APP.realCallsPerDay) return 'budget';
+  return '';
+}
+const wantsAI = (cost) => noAIReason(cost) === '';
+const spendOne = () => { if (budgeted()) spend(1); };
+
+function refreshDemoPill() { $('#demoPill').hidden = usingAI(); refreshKitchen(); }
+function refreshKitchen() {
+  const closed = budgeted() && kitchenClosed();
+  const b = $('#kitchenBanner');
+  b.hidden = !closed;
+  if (closed) b.textContent = `Chef’s off duty till ${nextResetLocal()}. Everything’s a demo take until then.`;
+}
+
+// 18+ check, once, right before the first real AI call. "No" switches this device to demo mode.
+function confirmAge() {
+  if (!APP.ageGate || ageOk()) return Promise.resolve(true);
+  const d = $('#ageGate');
+  const p = aiProvider();
+  $('#ageProvider').textContent = p === 'relay' || p === 'gemini' ? 'Google Gemini' : (PROVIDERS[p]?.label || 'an AI service').split(' · ')[0];
+  return new Promise((resolve) => {
+    d.addEventListener('close', () => {
+      const yes = d.returnValue === 'yes';
+      if (yes) setAge(true);
+      else if (d.returnValue === 'no') { setAge(false); settings.forceDemo = true; saveSettings(); refreshDemoPill(); toast('No problem! Demo mode is on. You can change it in Settings.'); }
+      resolve(yes);
+    }, { once: true });
+    d.returnValue = '';
+    d.showModal();
+  });
+}
+
+function setNote(text, cls = '') {
+  const n = $('#runNote');
+  n.replaceChildren(); n.className = 'run-note ' + cls; n.hidden = !text;
+  if (text) n.append(text);
+  return n;
+}
 
 function fillSettingsForm() {
   const sel = $('#provider');
@@ -108,6 +154,7 @@ async function usePhoto(fileOrUrl, sampleId = null) {
   $('#photo').src = state.photo.toDataURL('image/jpeg', 0.85);
   $('#photo').alt = sampleId ? `Sample photo: ${SAMPLES.find((s) => s.id === sampleId).label}` : 'Your photo';
   $('#intro').hidden = true;
+  $('#teaser').hidden = true;
   $('#result').hidden = false;
   run();
 }
@@ -129,19 +176,32 @@ function setBusy(on, lines = COPY[state.mode].loading) {
 
 function hideOutputs() { $('#panel').hidden = true; $('#actions').hidden = true; $('#error').hidden = true; }
 
-async function run() {
+async function run({ force = false, demoOnly = false, attempt = 0 } = {}) {
   state.ctrl?.abort();
+  clearInterval(retryTimer);
   const ctrl = (state.ctrl = new AbortController());
   const mode = state.mode;
   hideOutputs();
+  if (!attempt) setNote('');
+  // Decide once, up front, whether this run may spend a real AI call (samples, tab switches and an empty budget never do).
+  const cost = callCost(mode);
+  const why = noAIReason(cost);
+  let ai = (force || !demoOnly) && why === '';
+  const needsCall = ai && !(mode === 'fridge' && state.fridge && !state.fridge.confirmed);
+  if (needsCall && !(await confirmAge())) ai = false;
+  if (ctrl.signal.aborted) return;
+  if (!ai && !demoOnly && why === 'budget') setNote(`You’ve used today’s real reads. Here’s Chef’s demo take. Fresh reads at ${nextResetLocal()}.`, 'budget');
+  if (!ai && !demoOnly && why === 'closed') refreshKitchen();
+
   // Fridge Chef with real AI: step 1 = read the photo into a checklist, step 2 = recipe from the confirmed list.
-  if (mode === 'fridge' && usingAI() && (!state.fridge || !state.fridge.confirmed)) {
+  if (mode === 'fridge' && ai && (!state.fridge || !state.fridge.confirmed)) {
     if (state.fridge) { showChecklist(); return; }
     const check = photoCheck(state.photo);
     if (check.blank) { showError(check.dark ? 'That photo’s basically pitch black. Try again with the fridge light on!' : 'That photo looks blank to me. Try a closer shot of your fridge shelves.', mode, true); return; }
     setBusy(true, COPY.fridge.scanLoading);
     try {
       const scan = await analyse({ ...aiArgs(), task: 'fridgeScan', dataUrl: fridgeDataUrl(), signal: ctrl.signal });
+      spendOne();
       if (ctrl.signal.aborted || mode !== state.mode) return;
       setBusy(false);
       state.fridge = makeChecklist(scan);
@@ -149,45 +209,86 @@ async function run() {
     } catch (e) {
       if (e.name === 'AbortError' || ctrl.signal.aborted) return;
       setBusy(false);
-      showError(e instanceof AIError ? e.message : 'Oops, something went sideways. Give it another shot.', mode, true);
+      aiFailed(e, mode, true, attempt);
     }
     return;
   }
-  setBusy(true, mode === 'fridge' && usingAI() ? COPY.fridge.recipeLoading : COPY[mode].loading);
+  setBusy(true, mode === 'fridge' && ai ? COPY.fridge.recipeLoading : COPY[mode].loading);
   let result, source;
   try {
-    if (usingAI()) {
+    if (ai) {
       if (mode === 'fridge') {
         const ingredients = state.fridge.items.filter((i) => i.checked && i.name.trim()).map(({ name, quantity }) => ({ name: name.trim(), quantity: quantity.trim() }));
         result = await analyse({ ...aiArgs(), task: 'fridgeRecipe', input: { ingredients, roll: state.roll }, signal: ctrl.signal });
       } else {
         result = await analyse({ ...aiArgs(), task: mode, dataUrl: state.apiDataUrl, signal: ctrl.signal });
       }
+      spendOne();
       source = 'ai';
     } else {
-      await new Promise((r) => setTimeout(r, 650 + Math.random() * 500));
+      await new Promise((r) => setTimeout(r, state.sampleId || demoOnly ? 250 : 650 + Math.random() * 500));
       result = demoResult(mode, state.features, state.sampleId, state.roll);
       source = 'demo';
     }
   } catch (e) {
     if (e.name === 'AbortError' || ctrl.signal.aborted) return;
     setBusy(false);
-    showError(e instanceof AIError ? e.message : 'Oops, something went sideways. Give it another shot.', mode, false);
+    aiFailed(e, mode, false, attempt);
     return;
   }
   if (ctrl.signal.aborted || mode !== state.mode) return;
   setBusy(false);
   state.result = result; state.source = source;
   showResult();
+  if (demoOnly) offerRealTake(mode);
 }
 
-function showError(msg, mode, offerManual) {
+// After a tab switch we show a free demo take, plus a button to spend a real read on it.
+function offerRealTake(mode) {
+  const cost = callCost(mode);
+  if (!wantsAI(cost)) return;
+  const n = setNote('', 'real-take'); n.hidden = false;
+  const b = el('button', 'btn btn-small real-take-btn', budgeted() ? `Get Chef’s real take (uses ${cost} of today’s ${budget().left})` : 'Get Chef’s real take');
+  b.type = 'button'; b.id = 'realTakeBtn';
+  b.onclick = () => { setNote(''); run({ force: true }); };
+  n.append(b);
+}
+
+// Quota and other AI errors. Daily cap → close the kitchen and go straight to a demo; per-minute → retry twice with a countdown.
+let retryTimer;
+function aiFailed(e, mode, offerManual, attempt) {
+  if (e instanceof AIError && e.kind === 'rate_day') {
+    closeKitchen(); refreshKitchen();
+    state.result = demoResult(mode, state.features, state.sampleId, state.roll); state.source = 'demo';
+    showResult();
+    setNote(`Chef’s off duty till ${nextResetLocal()}. Here’s a demo take meanwhile.`, 'closed');
+    return;
+  }
+  if (e instanceof AIError && e.kind === 'rate' && attempt < 2) {
+    let left = 20;
+    const tick = () => { $('#errorMsg').textContent = `Kitchen’s slammed, trying again in ${left} s… `; };
+    showError('', mode, offerManual, 'Show me a demo now');
+    tick();
+    const ctrl = state.ctrl;
+    retryTimer = setInterval(() => {
+      if (ctrl !== state.ctrl || ctrl.signal.aborted) { clearInterval(retryTimer); return; }
+      left -= 1;
+      if (left > 0) { tick(); return; }
+      clearInterval(retryTimer);
+      run({ force: true, attempt: attempt + 1 });
+    }, 1000);
+    return;
+  }
+  showError(e instanceof AIError ? e.message : 'Oops, something went sideways. Give it another shot.', mode, offerManual);
+}
+
+function showError(msg, mode, offerManual, demoLabel = 'Show me a demo result instead') {
   const box = $('#error');
   box.innerHTML = '';
-  box.append(msg + ' ');
+  const m = el('span', null, msg ? msg + ' ' : ''); m.id = 'errorMsg'; box.append(m);
   const b = document.createElement('button');
-  b.type = 'button'; b.className = 'link'; b.textContent = 'Show me a demo result instead';
-  b.onclick = () => { state.result = demoResult(mode, state.features, state.sampleId, state.roll); state.source = 'demo'; box.hidden = true; showResult(); };
+  b.type = 'button'; b.className = 'link'; b.id = 'demoNowBtn'; b.textContent = demoLabel;
+  b.onclick = () => { clearInterval(retryTimer); state.ctrl?.abort(); state.result = demoResult(mode, state.features, state.sampleId, state.roll); state.source = 'demo'; box.hidden = true; showResult(); };
   box.append(b);
   if (offerManual && mode === 'fridge') {
     const m = document.createElement('button');
@@ -384,13 +485,34 @@ function setMode(mode, focus = false) {
   document.querySelector('.intro .speech').dataset.chef = mode;
   $('#snapLabel').textContent = COPY[mode].snap;
   history.replaceState(null, '', '#' + mode);
-  if (state.photo && !$('#result').hidden) { state.roll = 0; run(); }
+  if (state.photo && !$('#result').hidden) { state.roll = 0; run({ demoOnly: true }); }
 }
 
 let toastTimer;
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 3200);
+}
+
+// ───────── First-load teaser (no network) ─────────
+const SEEN = 'snootfood.seen.v1';
+function showTeaser() {
+  try { if (localStorage.getItem(SEEN)) return; localStorage.setItem(SEEN, '1'); } catch { return; }
+  const r = demoResult('roast', null, 'noodles', 0);
+  const t = $('#teaser');
+  t.replaceChildren();
+  t.append(el('p', 'teaser-eyebrow', `Fresh from ${APP.chef}`));
+  const row = el('div', 'teaser-row');
+  const thumb = new Image(); thumb.src = 'samples/noodles.jpg'; thumb.alt = 'Sample photo: instant noodles'; thumb.width = 84; thumb.height = 84; thumb.className = 'teaser-thumb';
+  const sc = el('div', 'score teaser-score'); sc.setAttribute('role', 'img'); sc.setAttribute('aria-label', `Score: ${r.score} out of 10`);
+  sc.innerHTML = `<span aria-hidden="true">${Number(r.score)}<small>/10</small></span>`;
+  const txt = el('div', 'teaser-text');
+  txt.append(el('h3', null, r.headline), el('p', 'roast-quote', (r.roast.match(/^.*?[.!?](?=\s|$)/) || [r.roast])[0]));
+  row.append(thumb, sc, txt);
+  const cta = el('button', 'btn btn-small teaser-cta', 'Now roast yours ↓'); cta.type = 'button'; cta.id = 'teaserCta';
+  cta.onclick = () => { setMode('roast'); t.hidden = true; $('#capture').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+  t.append(row, cta);
+  t.hidden = false;
 }
 
 // ───────── Wire up ─────────
@@ -427,7 +549,7 @@ function init() {
   $('#shareBtn').onclick = share;
   $('#againBtn').onclick = () => { state.roll++; run(); };
   $('#editBtn').onclick = () => { if (state.fridge) { state.fridge.confirmed = false; showChecklist(); } };
-  $('#newBtn').onclick = () => { state.ctrl?.abort(); setBusy(false); $('#result').hidden = true; $('#intro').hidden = false; state.photo = null; state.fridge = null; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  $('#newBtn').onclick = () => { state.ctrl?.abort(); clearInterval(retryTimer); setNote(''); setBusy(false); $('#result').hidden = true; $('#intro').hidden = false; state.photo = null; state.fridge = null; window.scrollTo({ top: 0, behavior: 'smooth' }); };
   document.querySelectorAll('input[name=cardSize]').forEach((r) => (r.onchange = () => state.result && prerenderCard()));
 
   $('#settingsBtn').onclick = openSettings;
@@ -457,6 +579,7 @@ function init() {
   const initial = location.hash.slice(1);
   setMode(COPY[initial] ? initial : 'menu');
   refreshDemoPill();
+  showTeaser();
   prepareCardAssets();
 
   if ('serviceWorker' in navigator) {

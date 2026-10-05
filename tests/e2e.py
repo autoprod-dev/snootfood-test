@@ -47,10 +47,17 @@ def card_dims(path):
     from PIL import Image
     with Image.open(path) as im: return im.size
 
-def run_mode(pg, mode, sample, shot=None, card=None, story=False):
+AGE_OK = "try { localStorage.setItem('snootfood.age.v1', 'yes') } catch (e) {}"
+
+def upload_sample(pg, sample):
+    # Same pixels as the sample, but uploaded as the user's own photo (samples never use real AI).
+    pg.set_input_files('#uploadInput', str(ROOT / 'samples' / f'{sample}.jpg'))
+
+def run_mode(pg, mode, sample, shot=None, card=None, story=False, upload=False):
     if pg.is_visible('#newBtn'): pg.click('#newBtn')
     pg.click(f'.modes [data-mode={mode}]')
-    pg.click(f'[data-sample={sample}]')
+    if upload: upload_sample(pg, sample)
+    else: pg.click(f'[data-sample={sample}]')
     pg.wait_for_selector('#panel:not([hidden])', timeout=10000)
     if pg.is_visible('#cookBtn'):   # Fridge Chef with real AI: confirm the checklist first
         pg.click('#cookBtn'); pg.wait_for_selector('#panel.fridge:not(.checklist):not([hidden])', timeout=10000)
@@ -167,7 +174,7 @@ with sync_playwright() as p:
         'anthropic': ('api.anthropic.com', lambda t: {'content': [{'type': 'text', 'text': t}]}),
     }
     for prov, (host, shape) in shapes.items():
-        ctx = browser.new_context(**PHONE, accept_downloads=True)
+        ctx = browser.new_context(**PHONE, accept_downloads=True); ctx.add_init_script(AGE_OK)
         kerrs, khosts = instrument(ctx, prov)
         captured = []
         def handler(route, req, shape=shape):
@@ -183,7 +190,7 @@ with sync_playwright() as p:
             pg.evaluate(f"localStorage.setItem('snootfood.settings.v1', JSON.stringify({{provider:'{prov}', keys:{{{prov}:'TEST-KEY-not-real'}}, models:{{}}}}))"); pg.reload()
         check(f'{prov}: demo pill hidden once key set', not pg.is_visible('#demoPill'))
         for mode, sample in [('menu', 'pie'), ('roast', 'beans'), ('fridge', 'fridge')]:
-            text, card = run_mode(pg, mode, sample, card=f'_tmp-{prov}-{mode}.png')
+            text, card = run_mode(pg, mode, sample, card=f'_tmp-{prov}-{mode}.png', upload=True)
             check(f'{prov} {mode}: mocked AI result rendered', 'Mock' in text and 'DEMO' not in text, text[:60].replace('\n', ' '))
             if mode == 'roast': check(f'{prov}: score clamped to 10 and PG filter applied', '10/10' in text.replace('\n', '') and 'damn' not in text)
         url, headers, body = captured[0]
@@ -202,13 +209,14 @@ with sync_playwright() as p:
         ctx.close()
 
     # ── 5. Provider error path (429) shows friendly message + demo fallback ──
-    ctx = browser.new_context(**PHONE)
+    ctx = browser.new_context(**PHONE); ctx.add_init_script(AGE_OK)
     pg = ctx.new_page()
     ctx.route('https://generativelanguage.googleapis.com/**', lambda r: r.fulfill(status=429, headers={'access-control-allow-origin': '*'}, body='{"error":{"code":429}}'))
     pg.goto(BASE); pg.evaluate("localStorage.setItem('snootfood.settings.v1', JSON.stringify({provider:'gemini', keys:{gemini:'X'}}))"); pg.reload()
-    pg.click('[data-sample=noodles]'); pg.wait_for_selector('#error:not([hidden])')
-    check('429 shows friendly rate-limit message', 'rate limit' in pg.inner_text('#error'))
-    pg.click('#error button'); pg.wait_for_selector('#panel:not([hidden])')
+    upload_sample(pg, 'noodles'); pg.wait_for_selector('#error:not([hidden])')
+    t1 = pg.inner_text('#error'); pg.wait_for_timeout(2100); t2 = pg.inner_text('#error')
+    check('429 → "Kitchen’s slammed" countdown that ticks down', 'trying again in' in t1 and t1 != t2, f'{t1[:50]} → {t2[:50]}')
+    pg.click('#demoNowBtn'); pg.wait_for_selector('#panel:not([hidden])')
     check('error → demo fallback works', 'DEMO' in pg.inner_text('#panel'))
     ctx.close()
 
@@ -231,12 +239,71 @@ with sync_playwright() as p:
     # ── 7. Live CORS smoke test against the REAL Gemini endpoint with a fake key (no quota used) ──
     if os.environ.get('LIVE_CORS', '1') == '1':
         ctx = browser.new_context(**PHONE)
-        pg = ctx.new_page(); pg.goto(BASE)
+        ctx.add_init_script(AGE_OK); pg = ctx.new_page(); pg.goto(BASE)
         pg.evaluate("localStorage.setItem('snootfood.settings.v1', JSON.stringify({provider:'gemini', keys:{gemini:'AIzaFAKE-not-a-real-key'}}))"); pg.reload()
-        pg.click('[data-sample=noodles]'); pg.wait_for_selector('#error:not([hidden])', timeout=20000)
+        upload_sample(pg, 'noodles'); pg.wait_for_selector('#error:not([hidden])', timeout=20000)
         msg = pg.inner_text('#error')
         check('live Gemini from browser: CORS allowed, fake key rejected with friendly message', 'key didn’t work' in msg, msg[:90])
         ctx.close()
+
+    # ── 8. QW1: demo-first, 18+ check, budget, quota (relay MOCKED: nothing reaches Google) ──
+    def relay_ctx(reply=None):
+        ctx = browser.new_context(**PHONE, accept_downloads=True)
+        calls = []
+        def gas(route, req):
+            calls.append(req.post_data or '')
+            txt = req.post_data or ''
+            mode = 'roast' if 'Rate the plating' in txt else 'scan' if 'Scan these fridge contents' in txt else 'fridge' if 'Confirmed ingredients' in txt else 'menu'
+            out = reply or {'ok': True, 'model': 'gemini-flash-latest', 'data': shapes['gemini'][1](json.dumps(mock_payload(mode)))}
+            route.fulfill(status=200, headers={'access-control-allow-origin': '*', 'content-type': 'application/json'}, body=json.dumps(out))
+        ctx.route('https://script.google.com/**', gas)
+        ctx.route('https://script.googleusercontent.com/**', gas)
+        ctx.route('https://generativelanguage.googleapis.com/**', lambda r: (calls.append('DIRECT'), r.abort()))
+        qerrs, _ = instrument(ctx, 'qw1')
+        return ctx, calls, qerrs
+    ctx, calls, qerrs = relay_ctx()
+    pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    check('teaser: first load shows a roast teaser (score, headline, CTA) with no AI call', pg.is_visible('#teaser') and '/10' in pg.inner_text('#teaser') and 'Now roast yours' in pg.inner_text('#teaser') and not calls)
+    pg.screenshot(path=str(SHOTS / 'qw1-teaser.png'))
+    for sample in ('noodles', 'beans', 'fridge'):
+        if pg.is_visible('#newBtn'): pg.click('#newBtn')
+        pg.click(f'[data-sample={sample}]'); pg.wait_for_selector('#panel:not([hidden])')
+    check('samples never call the relay (always demo), even with real AI on', not calls and 'DEMO' in pg.inner_text('#panel'), str(len(calls)))
+    pg.click('#newBtn'); pg.click('.modes [data-mode=roast]'); upload_sample(pg, 'beans')
+    pg.wait_for_selector('#ageGate[open]', timeout=5000)
+    check('18+ dialog appears before the first real call (nothing sent yet)', pg.is_visible('#ageGate') and not calls and 'Google Gemini' in pg.inner_text('#ageGate'))
+    pg.screenshot(path=str(SHOTS / 'qw1-age-gate.png'))
+    pg.click('#ageYes'); pg.wait_for_selector('#panel.roast:not([hidden])')
+    check('after "Yes": one real call, AI result shown', len(calls) == 1 and 'Mock headline' in pg.inner_text('#panel'), str(len(calls)))
+    pg.click('.modes [data-mode=menu]'); pg.wait_for_selector('#panel.menu:not([hidden])'); pg.wait_for_timeout(300)
+    check('tab switch after an AI result: no new call, demo take + "real take" button', len(calls) == 1 and 'DEMO' in pg.inner_text('#panel') and 'uses 1 of today’s 2' in pg.inner_text('#runNote'), pg.inner_text('#runNote'))
+    pg.click('#realTakeBtn'); pg.wait_for_selector('#panel.menu:not([hidden])'); pg.wait_for_function("() => document.querySelector('#panel').innerText.includes('Mock Soufflé')")
+    check('"Get Chef’s real take" spends exactly one call, no second 18+ prompt', len(calls) == 2 and not pg.is_visible('#ageGate'), str(len(calls)))
+    pg.click('#againBtn'); pg.wait_for_function("() => !document.querySelector('#panel').hidden && document.querySelector('#panel').innerText.includes('Mock')")
+    check('budget: 3rd real call allowed', len(calls) == 3, str(len(calls)))
+    pg.click('#newBtn'); pg.click('.modes [data-mode=roast]'); upload_sample(pg, 'pie'); pg.wait_for_selector('#panel:not([hidden])')
+    check('budget used up → demo take + "Fresh reads at …" note, no call', len(calls) == 3 and 'DEMO' in pg.inner_text('#panel') and 'Fresh reads at' in pg.inner_text('#runNote'), pg.inner_text('#runNote'))
+    used = pg.evaluate("JSON.parse(localStorage.getItem('snootfood.budget.v1'))")
+    check('spend counted per successful call, keyed by Pacific day', used['used'] == 3 and len(used['day']) == 10, str(used))
+    errs += qerrs; ctx.close()
+
+    ctx, calls, qerrs = relay_ctx({'ok': False, 'error': {'code': 'quota', 'message': 'That’s the daily limit for real photo reading. Come back tomorrow, or grab a demo result.'}})
+    ctx.add_init_script(AGE_OK)
+    pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    pg.click('.modes [data-mode=roast]'); upload_sample(pg, 'beans'); pg.wait_for_selector('#panel:not([hidden])')
+    check('daily limit reply → kitchen closed banner + demo take straight away', pg.is_visible('#kitchenBanner') and 'off duty' in pg.inner_text('#runNote') and 'DEMO' in pg.inner_text('#panel') and len(calls) == 1)
+    pg.screenshot(path=str(SHOTS / 'qw1-kitchen-closed.png'))
+    pg.click('#newBtn'); upload_sample(pg, 'pie'); pg.wait_for_selector('#panel:not([hidden])'); pg.reload(); pg.wait_for_load_state('networkidle')
+    check('kitchen stays closed for the rest of the Pacific day (no more calls, banner on reload)', len(calls) == 1 and pg.is_visible('#kitchenBanner'), str(len(calls)))
+    errs += qerrs; ctx.close()
+
+    ctx, calls, qerrs = relay_ctx()
+    pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    upload_sample(pg, 'noodles'); pg.wait_for_selector('#ageGate[open]'); pg.click('#ageNo'); pg.wait_for_selector('#panel:not([hidden])')
+    check('18+ "No" → demo mode on, nothing sent, demo pill back', not calls and 'DEMO' in pg.inner_text('#panel') and pg.is_visible('#demoPill') and pg.evaluate("JSON.parse(localStorage.getItem('snootfood.settings.v1')).forceDemo === true"))
+    pg.reload(); pg.wait_for_load_state('networkidle')
+    check('teaser only on the very first load', not pg.is_visible('#teaser'))
+    errs += qerrs; ctx.close()
 
     check('no console errors / page errors', not errs, ' | '.join(errs)[:500])
     browser.close()

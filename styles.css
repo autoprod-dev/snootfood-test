@@ -187,7 +187,7 @@ details .field, details .check { margin-top: 10px; }
   .result:not([hidden]) { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
   .result .photo-wrap { grid-column: 1; grid-row: 1 / span 3; aspect-ratio: 1; position: sticky; top: 16px; }
   .result .panel { margin-top: 0; grid-column: 2; }
-  .result .loading, .result .error, .result .actions { grid-column: 2; }
+  .result .loading, .result .error, .result .actions, .result .run-note { grid-column: 2; }
   .intro { display: grid; grid-template-columns: 1.1fr 1fr; gap: 28px; align-items: start; }
   .intro .speech { grid-column: 1 / -1; }
   .intro-chef img, .speech[data-chef=menu] .intro-chef img { height: 180px; }
@@ -231,3 +231,25 @@ details .field, details .check { margin-top: 10px; }
 .cook-btn { width: 100%; background: #f2c14e; color: #2a1f1a; box-shadow: 0 8px 20px rgba(242,193,78,.3); }
 .cook-btn:disabled { opacity: .55; cursor: not-allowed; }
 .ck-retake { width: 100%; margin-top: 8px; color: #f4f1e8; border-color: rgba(255,255,255,.3); }
+
+/* ── QW1: kitchen closed, run notes, 18+ check, first-load teaser ── */
+.kitchen-banner { background: #2a1f1a; color: #f6efe1; border-left: 6px solid #ff5a3c; border-radius: 12px; padding: 10px 14px; margin: 0 0 14px; font: 600 .92rem/1.35 var(--sans); }
+.kitchen-banner::before { content: "🔒 "; }
+.kitchen-banner[hidden], .run-note[hidden], .teaser[hidden] { display: none; }
+.run-note { margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; background: #fff6d9; border: 1px dashed var(--gold); color: var(--ink-2); font: 500 .92rem/1.4 var(--sans); }
+.run-note.closed { background: #2a1f1a; color: #f6efe1; border: 0; border-left: 6px solid #ff5a3c; }
+.run-note.real-take { background: none; border: 0; padding: 0; text-align: center; }
+.real-take-btn { width: 100%; }
+.age-form { padding: 22px; display: grid; gap: 12px; text-align: center; }
+.age-chef { height: 120px; width: auto; justify-self: center; }
+.age-form h2 { font: italic 600 1.4rem/1.2 var(--serif); margin: 0; }
+.age-form p { margin: 0; color: var(--ink-2); }
+.age-actions { display: grid; gap: 10px; }
+.teaser { background: #17110f; color: #f3e9dc; border-radius: var(--radius); padding: 14px 16px 16px; margin: 0 0 16px; box-shadow: var(--shadow); animation: rise .5s ease both; }
+.teaser-eyebrow { margin: 0 0 10px; font: 600 .72rem/1 var(--sans); letter-spacing: .28em; text-transform: uppercase; color: #ff5a3c; }
+.teaser-row { display: grid; grid-template-columns: auto auto 1fr; gap: 12px; align-items: center; }
+.teaser-thumb { border-radius: 12px; object-fit: cover; }
+.teaser .teaser-score { width: 64px; height: 64px; font-size: 1.5rem; box-shadow: 0 0 0 3px #17110f, 0 0 0 5px #f3e9dc; }
+.teaser h3 { margin: 0 0 4px; font: 800 1.05rem/1.2 var(--serif); color: #fff; }
+.teaser .roast-quote { margin: 0; font-size: .92rem; }
+.teaser-cta { margin-top: 12px; width: 100%; background: #c8102e; color: #fff; border-color: #c8102e; }

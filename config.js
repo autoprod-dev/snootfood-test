@@ -29,4 +29,8 @@ export const APP = {
   // Optional shared token for the Apps Script relay (must match APP_TOKEN in Script Properties).
   // It is visible to anyone who reads this file, so it is only light protection.
   relayToken: '',
+  // Real AI reads per device per Pacific day (honour system; the relay's own 40/day per client stays the hard limit).
+  realCallsPerDay: 3,
+  // Ask "are you 18+?" once, before the first real AI call (Gemini is for adults only).
+  ageGate: true,
 };

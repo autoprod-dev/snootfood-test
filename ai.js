@@ -177,7 +177,7 @@ function friendlyHttpError(status, bodyText, viaRelay = false) {
     // The relay already sends friendly, safe-to-show messages.
     try {
       const e = JSON.parse(bodyText)?.error;
-      if (e?.message) return new AIError(String(e.message).slice(0, 200), status === 429 ? 'rate' : e.code === 'bad_origin' || e.code === 'upstream_auth' ? 'auth' : 'error');
+      if (e?.message) return new AIError(String(e.message).slice(0, 200), e.code === 'rate_day' ? 'rate_day' : status === 429 ? 'rate' : e.code === 'bad_origin' || e.code === 'upstream_auth' ? 'auth' : 'error');
     } catch { /* fall through */ }
   }
   if (status === 400 && /api key|API_KEY/i.test(bodyText)) return new AIError(MESSAGES.badKey, 'auth');
@@ -304,7 +304,8 @@ export async function postAppsScript(url, payload, signal) {
   try { out = JSON.parse(text); } catch { throw new AIError(res.ok ? MESSAGES.weird : MESSAGES.server, res.ok ? 'parse' : 'server'); }
   if (out && out.ok === true && out.data) return out.data;
   const err = out?.error || {};
-  throw new AIError(err.message ? String(err.message).slice(0, 200) : MESSAGES.server, GAS_KIND[err.code] || 'error');
+  const kind = err.code === 'quota' && /daily limit/i.test(err.message || '') ? 'rate_day' : GAS_KIND[err.code] || 'error';   // per-day cap vs per-minute
+  throw new AIError(err.message ? String(err.message).slice(0, 200) : MESSAGES.server, kind);
 }
 
 const promptFor = (t, input) => t.prompt(input || {});

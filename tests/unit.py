@@ -169,6 +169,24 @@ with sync_playwright() as p:
     sw2 = (ROOT / 'sw.js').read_text()
     check('service worker caches budget.js', "'./budget.js'" in sw2 or '"./budget.js"' in sw2 or 'budget.js' in sw2)
 
+    # ── QW5: link previews ──
+    html = (ROOT / 'index.html').read_text()
+    url = pg.evaluate("async () => (await import('/config.js')).APP.url")
+    meta = lambda prop: (re.search(r'(?:property|name)="' + re.escape(prop) + r'" content="([^"]*)"', html) or [None, None])[1]
+    check('OG/Twitter tags present with absolute URLs from APP.url', meta('og:url') == url and meta('og:image') == url + 'og.png' and f'<link rel="canonical" href="{url}">' in html and meta('twitter:card') == 'summary_large_image' and meta('og:title') and meta('og:description') and meta('og:image:alt'), str([meta('og:url'), meta('og:image')]))
+    check('test build is still noindex', 'noindex' in (meta('robots') or ''))
+    with Image.open(ROOT / 'og.png') as im: og_size = im.size
+    check('og.png is 1200×630 and under 300 KB (WhatsApp limit)', og_size == (1200, 630) and (ROOT / 'og.png').stat().st_size < 300_000, f'{og_size} {(ROOT / "og.png").stat().st_size} B')
+    import shutil, subprocess, tempfile
+    with tempfile.TemporaryDirectory() as td:
+        t = pathlib.Path(td); (t / 'tools').mkdir()
+        for f in ('index.html', 'manifest.webmanifest'): shutil.copy(ROOT / f, t / f)
+        shutil.copy(ROOT / 'tools' / 'apply-config.mjs', t / 'tools' / 'apply-config.mjs')
+        (t / 'config.js').write_text((ROOT / 'config.js').read_text().replace(url, 'https://snootfood.example/'))
+        subprocess.run(['node', str(t / 'tools' / 'apply-config.mjs')], check=True, capture_output=True)
+        out = (t / 'index.html').read_text()
+    check('apply-config rewrites canonical + og:url + og:image for production', 'href="https://snootfood.example/"' in out and 'content="https://snootfood.example/og.png"' in out and url not in out)
+
     check('no page errors', not errs, ' | '.join(errs))
     browser.close()
 

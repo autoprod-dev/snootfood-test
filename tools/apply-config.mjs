@@ -1,4 +1,5 @@
-// Syncs the app name from config.js into index.html <title>, the manifest and sw cache name.
+// Syncs the app name and URL from config.js into index.html (<title>, canonical, Open Graph) and the manifest.
+// Note: the test build keeps <meta name="robots" content="noindex">; remove it by hand for production.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { APP } from '../config.js';
 const root = new URL('../', import.meta.url);
@@ -6,7 +7,12 @@ const suffix = APP.isTest ? ' (TEST)' : '';
 const html = readFileSync(new URL('index.html', root), 'utf8')
   .replace(/<title>.*?<\/title>/, `<title>${APP.name}${suffix} · ${APP.tagline}</title>`)
   .replace(/(name="apple-mobile-web-app-title" content=")[^"]*"/, `$1${APP.name}"`)
-  .replace(/(name="application-name" content=")[^"]*"/, `$1${APP.name}"`);
+  .replace(/(name="application-name" content=")[^"]*"/, `$1${APP.name}"`)
+  // Link previews need absolute URLs, so the production build must point them at the production site.
+  .replace(/(<link rel="canonical" href=")[^"]*"/, `$1${APP.url}"`)
+  .replace(/(property="og:url" content=")[^"]*"/, `$1${APP.url}"`)
+  .replace(/(property="og:image" content=")[^"]*"/, `$1${new URL('og.png', APP.url).href}"`)
+  .replace(/(property="og:site_name" content=")[^"]*"/, `$1${APP.name}"`);
 writeFileSync(new URL('index.html', root), html);
 const m = JSON.parse(readFileSync(new URL('manifest.webmanifest', root), 'utf8'));
 m.name = `${APP.name}${suffix}`; m.short_name = APP.name; m.description = `${APP.tagline} A just-for-fun ${APP.brand} experiment.`;

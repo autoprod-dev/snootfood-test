@@ -435,30 +435,65 @@ async function prerenderCard() {
   if (state.cardKey !== key) return null;
   const name = `${APP.name.toLowerCase()}-${state.mode}-${Date.now().toString(36)}.png`;
   state.card = new File([blob], name, { type: 'image/png' });
+  syncShareLabel(state.card);
   return state.card;
 }
 
-function shareText() {
+// ───────── Share (QW2) ─────────
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const MODE_TAG = { roast: '#RateMyPlate', menu: '#FancyMenu', fridge: '#FridgeChef' };
+const challengeUrl = () => APP.url;   // QW3 adds the challenge params
+const dailyTag = () => '';            // QW6 adds "Snootfood #12 🔥3"
+
+function caption() {
   const r = state.result;
-  if (state.mode === 'menu') return `Tonight at ${APP.restaurant}: “${r.dishName}” for ${r.price}. Get your own fancy menu:`;
-  if (state.mode === 'roast') return `${APP.chef} gave my plating a ${r.score}/10 😤 Think you can beat it?`;
-  return `My fridge just made tonight’s special: “${r.specialName}”. Raid yours:`;
+  const line = state.mode === 'roast' ? `${APP.chef} gave my plate a ${r.score}/10 😤 Think your plate can beat it?`
+    : state.mode === 'menu' ? `Tonight at ${APP.restaurant}: “${r.dishName}” for ${r.price}. Get your dinner a fancy menu:`
+    : `My fridge just made tonight’s special: “${r.specialName}”. Raid yours:`;
+  const url = challengeUrl();
+  const tags = ['#ChefGerardo', '#SnootfoodChallenge', MODE_TAG[state.mode]].join(' ');
+  const daily = dailyTag();
+  return { text: line, url, full: `${line} ${url}\n${tags}${daily ? '\n' + daily : ''}` };
 }
 
-async function share() {
-  const btn = $('#shareBtn');
-  btn.disabled = true;
-  try {
-    const file = state.card || (await prerenderCard());
-    if (!file) return;
-    const data = { files: [file], title: APP.name, text: `${shareText()} ${APP.url}` };
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share(data); $('#shareNote').textContent = 'Shared! Enjoy the hype.'; }
-      catch (e) { if (e.name !== 'AbortError') download(file); }
+const canShareFile = (file) => { try { return !!(navigator.share && navigator.canShare?.({ files: [file] })); } catch { return false; } };
+function copyCaption(text) {   // resolves true/false; never throws
+  try { return navigator.clipboard ? navigator.clipboard.writeText(text).then(() => true, () => false) : Promise.resolve(false); } catch { return Promise.resolve(false); }
+}
+function afterShare() { /* QW6 markShared(), QW8 maybeNudgeInstall('share') */ }
+
+function share() {
+  const file = state.card;
+  if (!file) {
+    // Never await inside the tap: the share sheet needs a fresh user gesture. Get the card ready and ask for one more tap.
+    const note = $('#shareNote');
+    if (navigator.share) {
+      note.textContent = 'One sec… getting your card ready.';
+      prerenderCard().then((f) => { if (f) note.textContent = 'Ready! Tap Share again.'; });
     } else {
-      download(file);
+      note.textContent = 'One sec…';
+      prerenderCard().then((f) => f && download(f));   // a download doesn't need the gesture
     }
-  } finally { btn.disabled = false; }
+    return;
+  }
+  const c = caption();
+  if (canShareFile(file)) {
+    const copied = copyCaption(c.full);   // not awaited: keep the gesture for navigator.share
+    const data = isIOS() ? { files: [file] } : { files: [file], title: APP.name, text: c.full };
+    navigator.share(data).then(async () => {
+      $('#shareNote').textContent = (await copied) ? 'Caption copied, paste it in your post.' : 'Shared! Enjoy the hype.';
+      afterShare();
+    }).catch((e) => {
+      if (e?.name === 'AbortError' || e?.name === 'InvalidStateError') return;   // closed the sheet, or a share is already open
+      download(file);
+    });
+  } else {
+    download(file);
+  }
+}
+
+function syncShareLabel(file) {
+  $('#shareBtn span').textContent = file && canShareFile(file) ? 'Share' : 'Save image';
 }
 
 function download(file) {
@@ -467,6 +502,8 @@ function download(file) {
   a.href = url; a.download = file.name; document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
   $('#shareNote').textContent = 'Saved! Post it anywhere and tag your friends.';
+  if (state.result) copyCaption(caption().full).then((ok) => { if (ok) $('#shareNote').textContent = 'Saved! Caption copied too, so paste it in your post.'; });
+  afterShare();
 }
 
 // ───────── Mode switching ─────────

@@ -305,6 +305,50 @@ with sync_playwright() as p:
     check('teaser only on the very first load', not pg.is_visible('#teaser'))
     errs += qerrs; ctx.close()
 
+    # ── 9. QW2: one-tap share (Web Share mocked; demo only) ──
+    SHARE_MOCK = '''window.__shares = []; window.__shareMode = 'ok';
+      Object.defineProperty(navigator, 'canShare', { configurable: true, value: (d) => !!(d && d.files && d.files.length) });
+      Object.defineProperty(navigator, 'share', { configurable: true, value: (d) => { window.__shares.push({ files: (d.files || []).map((f) => f.name), title: d.title, text: d.text, keys: Object.keys(d).sort() });
+        return window.__shareMode === 'ok' ? Promise.resolve() : Promise.reject(new DOMException('mock', window.__shareMode)); } });'''
+    def share_ctx(**extra):
+        c = browser.new_context(**{**PHONE, **extra}, accept_downloads=True); c.add_init_script(FORCE_DEMO); c.add_init_script(SHARE_MOCK)
+        c.grant_permissions(['clipboard-read', 'clipboard-write'], origin=BASE.rstrip('/'))
+        e, _ = instrument(c, 'share'); return c, e
+    ctx, serrs = share_ctx()
+    pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    downloads = []; pg.on('download', lambda d: downloads.append(d))
+    pg.click('.modes [data-mode=menu]'); pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])')
+    pg.wait_for_function("() => document.querySelector('#shareBtn span').textContent === 'Share'", timeout=5000)
+    check('share button says "Share" when files can be shared', pg.inner_text('#shareBtn span') == 'Share')
+    pg.click('#shareBtn'); pg.wait_for_function("() => window.__shares.length === 1"); pg.wait_for_timeout(300)
+    sh = pg.evaluate('window.__shares[0]'); clip = pg.evaluate('navigator.clipboard.readText()')
+    check('share: card file + caption with link and #ChefGerardo #SnootfoodChallenge #FancyMenu', len(sh['files']) == 1 and sh['title'] == 'Snootfood' and '#ChefGerardo #SnootfoodChallenge #FancyMenu' in sh['text'] and 'autoprod-dev.github.io/snootfood-test/' in sh['text'] and 'Get your dinner a fancy menu' in sh['text'], str(sh))
+    check('share: caption copied to clipboard + "Caption copied" note', clip == sh['text'] and 'Caption copied' in pg.inner_text('#shareNote'), pg.inner_text('#shareNote'))
+    pg.screenshot(path=str(SHOTS / 'qw2-share-caption-note.png'))
+    for mode_, want in (('AbortError', 0), ('InvalidStateError', 0), ('NotAllowedError', 1)):
+        n0 = len(downloads); pg.evaluate(f"window.__shareMode = '{mode_}'"); pg.click('#shareBtn'); pg.wait_for_timeout(700)
+        check(f'share: {mode_} → {"download fallback" if want else "ignored, no download"}', len(downloads) - n0 == want, str(len(downloads) - n0))
+    pg.evaluate("window.__shareMode = 'ok'; window.__shares = []")
+    pg.evaluate("() => { document.querySelector('input[name=cardSize][value=story]').click(); document.querySelector('#shareBtn').click(); }")
+    check('share tapped before the card is ready → "One sec…", nothing awaited in the tap', 'One sec' in pg.inner_text('#shareNote') and pg.evaluate('window.__shares.length') == 0)
+    pg.wait_for_function("() => document.querySelector('#shareNote').textContent.includes('Tap Share again')", timeout=8000)
+    pg.click('#shareBtn'); pg.wait_for_function("() => window.__shares.length === 1")
+    check('…second tap shares the story card', len(pg.evaluate('window.__shares[0].files')) == 1)
+    pg.click('#newBtn'); pg.click('.modes [data-mode=roast]'); pg.click('[data-sample=beans]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(800)
+    pg.evaluate("window.__shares = []"); pg.click('#shareBtn'); pg.wait_for_function("() => window.__shares.length === 1")
+    t = pg.evaluate('window.__shares[0].text')
+    check('roast caption: score, American copy, #RateMyPlate', '/10 😤 Think your plate can beat it?' in t and '#RateMyPlate' in t and 'Reckon' not in t and 'mate' not in t.lower().replace('#ratemyplate', ''), t)
+    errs += serrs; ctx.close()
+    ctx, serrs = share_ctx(user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1')
+    pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(800); pg.click('#shareBtn'); pg.wait_for_function("() => window.__shares.length === 1")
+    check('iOS: shares the file only (caption goes via clipboard)', pg.evaluate('window.__shares[0].keys') == ['files'], str(pg.evaluate('window.__shares[0]')))
+    errs += serrs; ctx.close()
+    ctx = browser.new_context(**PHONE); ctx.add_init_script(FORCE_DEMO); pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(800)
+    check('no Web Share (desktop Linux Chromium) → button says "Save image"', pg.inner_text('#shareBtn span') == 'Save image', pg.inner_text('#shareBtn span'))
+    ctx.close()
+
     check('no console errors / page errors', not errs, ' | '.join(errs)[:500])
     browser.close()
 

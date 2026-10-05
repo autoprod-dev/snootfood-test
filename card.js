@@ -130,13 +130,13 @@ function menuCard(ctx, W, H, r, photo) {
   spaced(ctx, APP.restaurant.toUpperCase(), W / 2, 92, 10);
   ornament(ctx, W / 2, 146, 300, '#b8913a');
   ctx.font = `italic 500 28px ${SERIF}`; ctx.fillStyle = '#6b5446'; ctx.textAlign = 'center';
-  ctx.fillText('Ce soir, le chef propose', W / 2, 162);
+  ctx.fillText('On the menu tonight', W / 2, 162);
 
   const tw = W - 200;
   const name = fit(ctx, r.dishName, (s) => `italic 500 ${s}px ${SERIF}`, tw, 3, 74, 44);
   const desc = fit(ctx, r.description, (s) => `500 ${s}px ${SERIF}`, tw, 4, 34, 26);
   const notes = fit(ctx, '“' + r.chefNotes + '”', (s) => `italic 500 ${s}px ${SERIF}`, tw - 40, 3, 28, 22);
-  const pair = fit(ctx, 'Pairs with: ' + r.pairing, (s) => `600 ${s}px ${SERIF}`, tw, 2, 24, 20);
+  const pair = fit(ctx, 'Pair it with: ' + r.pairing, (s) => `600 ${s}px ${SERIF}`, tw, 2, 24, 20);
   const textH = name.lines.length * name.lh + 22 + desc.lines.length * desc.lh + 30 + 76 + 26 + 34 + notes.lines.length * notes.lh + 18 + pair.lines.length * pair.lh;
   const top = 222, bottom = H - 150;
   const photoH = Math.max(320, Math.min(H > 1500 ? 900 : 560, bottom - top - textH - 60));
@@ -163,7 +163,7 @@ function menuCard(ctx, W, H, r, photo) {
   y += 76 + 26;
 
   ctx.fillStyle = '#8a6d3b'; ctx.font = `600 22px ${SERIF}`;
-  spaced(ctx, 'NOTES DU CHEF', W / 2, y, 6); y += 34;
+  spaced(ctx, 'CHEF’S NOTES', W / 2, y, 6); y += 34;
   ctx.fillStyle = '#4a3b33';
   y = drawLines(ctx, notes, (s) => `italic 500 ${s}px ${SERIF}`, W / 2, y) + 18;
   ctx.fillStyle = '#6b5446';
@@ -182,13 +182,13 @@ function roastCard(ctx, W, H, r, photo) {
   ctx.fillStyle = '#ff5a3c'; ctx.textBaseline = 'top'; ctx.font = `800 34px ${SERIF}`;
   spaced(ctx, 'CHEF ROAST', W / 2, 70, 12);
   ctx.fillStyle = '#f3e9dc'; ctx.font = `600 40px ${HAND}`; ctx.textAlign = 'center';
-  ctx.fillText('as judged by ' + APP.chef, W / 2, 114);
+  ctx.fillText('judged by ' + APP.chef, W / 2, 114);
 
   const tw = W - 180;
   const head = fit(ctx, r.headline, (s) => `800 ${s}px ${SERIF}`, tw, 2, 66, 42);
   const roast = fit(ctx, r.roast, (s) => `italic 500 ${s}px ${SERIF}`, tw - 40, 6, 36, 26);
   const comp = fit(ctx, '✓ ' + r.compliment, (s) => `600 ${s}px ${SERIF}`, tw, 2, 26, 20);
-  const fix = fit(ctx, 'Chef’s tip: ' + r.fix, (s) => `600 ${s}px ${SERIF}`, tw, 2, 26, 20);
+  const fix = fit(ctx, 'Pro tip: ' + r.fix, (s) => `600 ${s}px ${SERIF}`, tw, 2, 26, 20);
   const textH = head.lines.length * head.lh + 26 + roast.lines.length * roast.lh + 26 + (comp.lines.length * comp.lh) + 10 + fix.lines.length * fix.lh;
   const top = 190, bottom = H - 150;
   const photoH = Math.max(300, Math.min(H > 1500 ? 860 : 500, bottom - top - textH - 110));
@@ -243,12 +243,12 @@ function fridgeCard(ctx, W, H, r, photo) {
   ctx.fillStyle = chalk; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.font = `600 76px ${HAND}`; ctx.fillText('Tonight’s Special', W / 2, 62);
   ctx.font = `italic 500 26px ${SERIF}`; ctx.fillStyle = '#cfe3d4';
-  ctx.fillText(`${APP.restaurant} · fresh from your fridge`, W / 2, 146);
+  ctx.fillText(`${APP.restaurant} · straight from your fridge`, W / 2, 146);
 
   const tw = W - 180;
   const name = fit(ctx, r.specialName, (s) => `italic 500 ${s}px ${SERIF}`, tw, 2, 64, 40);
   const desc = fit(ctx, r.description, (s) => `500 ${s}px ${SERIF}`, tw, 3, 30, 24);
-  const ingr = fit(ctx, 'With ' + r.ingredients.join(' · '), (s) => `600 ${s}px ${HAND}`, tw, 2, 38, 28);
+  const ingr = fit(ctx, 'Made with: ' + r.ingredients.join(' · '), (s) => `600 ${s}px ${HAND}`, tw, 2, 38, 28);
   const steps = r.steps.slice(0, 3).map((s, i) => fit(ctx, `${i + 1}. ${s}`, (z) => `600 ${z}px ${HAND}`, tw - 40, 2, 38, 28));
   const note = fit(ctx, '“' + r.note + '”', (s) => `italic 500 ${s}px ${SERIF}`, tw, 2, 26, 20);
   const stepsH = steps.reduce((s, b) => s + b.lines.length * b.lh + 4, 0);

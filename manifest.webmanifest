@@ -1,13 +1,13 @@
 {
   "name": "Snootfood (TEST)",
   "short_name": "Snootfood",
-  "description": "Every meal deserves a menu. A playful Autoprod experiment.",
+  "description": "Every meal deserves a menu. A just-for-fun Autoprod experiment.",
   "id": "./",
   "start_url": "./?source=pwa",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "lang": "en-AU",
+  "lang": "en-US",
   "theme_color": "#1b1411",
   "background_color": "#f6efe1",
   "categories": [

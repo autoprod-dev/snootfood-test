@@ -9,7 +9,7 @@ const html = readFileSync(new URL('index.html', root), 'utf8')
   .replace(/(name="application-name" content=")[^"]*"/, `$1${APP.name}"`);
 writeFileSync(new URL('index.html', root), html);
 const m = JSON.parse(readFileSync(new URL('manifest.webmanifest', root), 'utf8'));
-m.name = `${APP.name}${suffix}`; m.short_name = APP.name; m.description = `${APP.tagline} A playful ${APP.brand} experiment.`;
+m.name = `${APP.name}${suffix}`; m.short_name = APP.name; m.description = `${APP.tagline} A just-for-fun ${APP.brand} experiment.`;
 m.theme_color = APP.themeColour; m.background_color = APP.backgroundColour;
 writeFileSync(new URL('manifest.webmanifest', root), JSON.stringify(m, null, 2) + '\n');
 console.log('Applied', APP.name);

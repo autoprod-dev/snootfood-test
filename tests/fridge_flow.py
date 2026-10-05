@@ -5,7 +5,7 @@ Covers: scan → editable checklist (tick/untick/edit/add/remove) → recipe fro
 "Edit ingredients" round trip, photo quality warnings, errors (bad key, quota, network, blank photo,
 empty fridge), and both relay protocols (Apps Script + Cloudflare Worker) with no key in the browser.
 """
-import functools, http.server, io, json, os, pathlib, socket, sys, threading
+import functools, http.server, io, json, os, pathlib, re, socket, sys, threading
 from PIL import Image
 from playwright.sync_api import sync_playwright
 
@@ -76,7 +76,7 @@ with sync_playwright() as p:
     check('scan request: under 2 MB', len(img) * 3 / 4 < 2 * 1024 * 1024, f'{len(img) * 3 / 4 / 1024:.0f} KB')
     gc = scan_req['generationConfig']
     check('scan request: structured JSON (responseMimeType + schema with confidence enum)', gc['responseMimeType'] == 'application/json' and gc['responseSchema']['properties']['items']['items']['properties']['confidence']['enum'] == ['high', 'medium', 'low'])
-    check('scan request: low temperature for accuracy', gc['temperature'] <= 0.3, str(gc['temperature']))
+    check('scan request: temperature 1.0 for Gemini 3 models (Google guidance; lower can loop)', gc['temperature'] == 1.0, str(gc['temperature']))
     sysmsg = scan_req['systemInstruction']['parts'][0]['text']
     check('scan prompt: only clearly visible items, never invent', 'ONLY items that are clearly visible' in sysmsg and 'better to miss an item than to invent one' in sysmsg)
     names = pg.eval_on_selector_all('#checklist .ck-name', 'els => els.map(e => e.value)')
@@ -154,7 +154,7 @@ with sync_playwright() as p:
     # ── 4. Relays: no key in the browser ──
     def with_relay(ctx, url):
         def cfg(route):
-            body = route.fetch().text().replace("relayUrl: '',", f"relayUrl: '{url}',")
+            body = re.sub(r"relayUrl: '[^']*',", f"relayUrl: '{url}',", route.fetch().text())
             route.fulfill(status=200, headers={'content-type': 'text/javascript'}, body=body)
         ctx.route('**/config.js', cfg)
     # Apps Script: POST text/plain to /exec → 302 → googleusercontent → JSON {ok, data}
@@ -165,7 +165,7 @@ with sync_playwright() as p:
     def gas_exec(route, req):
         gas.append({'ct': req.headers.get('content-type'), 'body': json.loads(req.post_data), 'method': req.method})
         payload = SCAN if 'Scan these fridge contents' in req.post_data else RECIPE
-        out = {'ok': True, 'model': 'gemini-2.5-flash', 'data': json.loads(gemini_reply(payload))}
+        out = {'ok': True, 'model': 'gemini-flash-latest', 'data': json.loads(gemini_reply(payload))}
         route.fulfill(status=200, headers={'access-control-allow-origin': '*', 'content-type': 'application/json'}, body=json.dumps(out))
     ctx.route('https://script.google.com/**', gas_exec)
     hit_gemini = []
@@ -174,7 +174,7 @@ with sync_playwright() as p:
     check('relay configured → demo pill hidden (no key needed)', not pg.is_visible('#demoPill'))
     upload(pg); pg.wait_for_selector('#checklist', timeout=10000)
     first = gas[0]
-    check('apps script: POST text/plain (no preflight) with model, request, clientId, no key', first['method'] == 'POST' and first['ct'].startswith('text/plain') and first['body']['model'] == 'gemini-2.5-flash' and 'contents' in first['body']['request'] and len(first['body']['clientId']) >= 8 and sorted(first['body']) == ['clientId', 'model', 'request', 'v'] and 'TEST-KEY' not in json.dumps(first['body']) and 'AIza' not in json.dumps(first['body']), str(sorted(first['body'])))
+    check('apps script: POST text/plain (no preflight) with model, request, clientId, no key', first['method'] == 'POST' and first['ct'].startswith('text/plain') and first['body']['model'] == 'gemini-flash-latest' and 'contents' in first['body']['request'] and len(first['body']['clientId']) >= 8 and sorted(first['body']) == ['clientId', 'model', 'request', 'v'] and 'TEST-KEY' not in json.dumps(first['body']) and 'AIza' not in json.dumps(first['body']), str(sorted(first['body'])))
     pg.click('#cookBtn'); pg.wait_for_selector('#panel.fridge:not(.checklist):not([hidden])', timeout=10000)
     check('apps script: checklist → recipe works through the relay, Gemini never called directly', 'Victory Omelet' in pg.inner_text('#panel') and not hit_gemini)
     ctx.close()
@@ -194,7 +194,7 @@ with sync_playwright() as p:
         route.fulfill(status=200, headers={'access-control-allow-origin': '*', 'content-type': 'application/json'}, body=gemini_reply(payload))
     ctx.route('https://snootfood-relay.example.workers.dev/**', worker)
     pg = ctx.new_page(); setup(ctx, pg, key=False); upload(pg); pg.wait_for_selector('#checklist', timeout=10000)
-    check('worker: Gemini-shaped path, no key header, Referer carries page path', wk[0]['url'].endswith('/v1beta/models/gemini-2.5-flash:generateContent') and 'x-goog-api-key' not in wk[0]['headers'] and wk[0]['headers'].get('referer', '').startswith(BASE.rstrip('/')), str(wk[0]['headers'].get('referer')))
+    check('worker: Gemini-shaped path, no key header, Referer carries page path', wk[0]['url'].endswith('/v1beta/models/gemini-flash-latest:generateContent') and 'x-goog-api-key' not in wk[0]['headers'] and wk[0]['headers'].get('referer', '').startswith(BASE.rstrip('/')), str(wk[0]['headers'].get('referer')))
     ctx.close()
 
     # ── 5. Apps Script-style redirect, for real: POST text/plain → 302 to another origin → JSON ──
@@ -215,8 +215,8 @@ with sync_playwright() as p:
     exec_port, echo_port = start(Exec), start(Echo)
     ctx = browser.new_context(bypass_csp=True)   # the real CSP allows script.google.com / script.googleusercontent.com
     pg = ctx.new_page(); pg.goto(serve())   # always a local http page (an https page can't call these http test servers)
-    out = pg.evaluate("""async (url) => { const m = await import('./ai.js'); return m.postAppsScript(url, { v: 1, model: 'gemini-2.5-flash', request: {}, clientId: 'abcdef123456' }); }""", f'http://127.0.0.1:{exec_port}/macros/s/X/exec')
-    check('apps script redirect: fetch follows the 302 cross-origin and reads JSON', out == {'echo': 'gemini-2.5-flash'}, str(out))
+    out = pg.evaluate("""async (url) => { const m = await import('./ai.js'); return m.postAppsScript(url, { v: 1, model: 'gemini-flash-latest', request: {}, clientId: 'abcdef123456' }); }""", f'http://127.0.0.1:{exec_port}/macros/s/X/exec')
+    check('apps script redirect: fetch follows the 302 cross-origin and reads JSON', out == {'echo': 'gemini-flash-latest'}, str(out))
     check('apps script redirect: no CORS preflight (text/plain simple request)', hits['options'] == 0 and hits['post'] == 1 and hits['get'] == 1 and hits['ct'].startswith('text/plain'), str(hits))
     ctx.close()
 

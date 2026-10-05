@@ -39,6 +39,10 @@ def instrument(ctx, label):
     ctx.on('page', page_hook)
     return errs, hosts
 
+# The deployed config points at the real relay. Demo-mode checks force demo via the app's own
+# "Always use demo mode" setting so they never spend real AI quota.
+FORCE_DEMO = "try { if (!localStorage.getItem('snootfood.settings.v1')) localStorage.setItem('snootfood.settings.v1', JSON.stringify({forceDemo: true})) } catch (e) {}"
+
 def card_dims(path):
     from PIL import Image
     with Image.open(path) as im: return im.size
@@ -63,7 +67,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch()
 
     # ── 1. Phone, demo mode, every mode + share cards ──
-    ctx = browser.new_context(**PHONE, accept_downloads=True)
+    ctx = browser.new_context(**PHONE, accept_downloads=True); ctx.add_init_script(FORCE_DEMO)
     errs, hosts = instrument(ctx, 'phone')
     pg = ctx.new_page()
     pg.goto(BASE); pg.wait_for_load_state('networkidle')
@@ -104,7 +108,7 @@ with sync_playwright() as p:
     ctx.close()
 
     # ── 2. Desktop ──
-    ctx = browser.new_context(**DESKTOP, accept_downloads=True)
+    ctx = browser.new_context(**DESKTOP, accept_downloads=True); ctx.add_init_script(FORCE_DEMO)
     derrs, dhosts = instrument(ctx, 'desktop')
     pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
     pg.screenshot(path=str(SHOTS / 'desktop-1-home.png'))
@@ -116,7 +120,7 @@ with sync_playwright() as p:
     ctx.close()
 
     # ── 3. PWA: manifest, installability, offline shell ──
-    ctx = browser.new_context(**PHONE, accept_downloads=True)
+    ctx = browser.new_context(**PHONE, accept_downloads=True); ctx.add_init_script(FORCE_DEMO)
     perrs, _ = instrument(ctx, 'pwa')
     pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
     pg.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.ready.then(() => true)", timeout=15000)
@@ -200,7 +204,7 @@ with sync_playwright() as p:
 
     # ── 6. Accessibility (axe-core, test-only injection) ──
     if os.path.exists(AXE):
-        ctx = browser.new_context(**PHONE, bypass_csp=True)
+        ctx = browser.new_context(**PHONE, bypass_csp=True); ctx.add_init_script(FORCE_DEMO)
         pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
         axe = open(AXE).read()
         def audit(label):

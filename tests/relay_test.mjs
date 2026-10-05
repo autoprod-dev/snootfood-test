@@ -11,7 +11,7 @@ const goodBody = (img = 1000) => ({ contents: [{ role: 'user', parts: [{ inlineD
 
 // ───────── Cloudflare Worker ─────────
 const env = { GEMINI_API_KEY: 'SECRET-KEY', ALLOW_LOCALHOST: 'true', RL_MINUTE: { n: 0, async limit() { return { success: ++this.n <= 10 }; } }, RL_DAILY: { m: new Map(), async get(k) { return this.m.get(k) ?? null; }, async put(k, v) { this.m.set(k, v); } } };
-const req = (headers, body, path = '/v1beta/models/gemini-2.5-flash:generateContent', method = 'POST') => new Request('https://relay.example' + path, { method, headers: { 'content-type': 'application/json', 'CF-Connecting-IP': '1.2.3.4', ...headers }, body: method === 'POST' ? JSON.stringify(body) : undefined });
+const req = (headers, body, path = '/v1beta/models/gemini-flash-latest:generateContent', method = 'POST') => new Request('https://relay.example' + path, { method, headers: { 'content-type': 'application/json', 'CF-Connecting-IP': '1.2.3.4', ...headers }, body: method === 'POST' ? JSON.stringify(body) : undefined });
 const GH = { Origin: 'https://autoprod-dev.github.io', Referer: 'https://autoprod-dev.github.io/snootfood-test/#fridge' };
 
 check('worker origin: test site allowed', originAllowed(req(GH, {}), env) === GH.Origin);
@@ -42,13 +42,13 @@ r = await call(req({ Origin: 'https://evil.com' }, goodBody()));
 check('worker: bad origin → 403 friendly JSON', r.status === 403 && r.body.error.code === 'bad_origin' && !r.cors);
 r = await call(req(GH, goodBody(), '/v1beta/models/gemini-3.1-pro-preview:generateContent'));
 check('worker: non-allowlisted model → 400 bad_model', r.status === 400 && r.body.error.code === 'bad_model');
-r = await call(req(GH, goodBody(), '/v1beta/models/gemini-2.5-flash:streamGenerateContent'));
+r = await call(req(GH, goodBody(), '/v1beta/models/gemini-flash-latest:streamGenerateContent'));
 check('worker: other endpoint → 404', r.status === 404);
-r = await call(req(GH, goodBody(), '/v1beta/models/gemini-2.5-flash:generateContent?key=x'));
+r = await call(req(GH, goodBody(), '/v1beta/models/gemini-flash-latest:generateContent?key=x'));
 check('worker: query string rejected', r.status === 400);
 upstreamCalls = []; upstreamStatus = [404, 200];
 r = await call(req(GH, goodBody()));
-check('worker: gemini-2.5-flash 404 → falls back to gemini-flash-latest', r.status === 200 && upstreamCalls.length === 2 && upstreamCalls[1].url.includes('gemini-flash-latest'));
+check('worker: gemini-flash-latest 404 → falls back to gemini-3.5-flash-lite', r.status === 200 && upstreamCalls.length === 2 && upstreamCalls[1].url.includes('gemini-3.5-flash-lite'));
 upstreamStatus = [400];
 r = await call(req(GH, goodBody()));
 check('worker: upstream bad key mapped, raw Google error not leaked', r.status === 502 && r.body.error.code === 'upstream_auth' && !JSON.stringify(r.body).includes('SECRET'));
@@ -62,7 +62,7 @@ env.RL_MINUTE.n = 0; env.DAILY_LIMIT = '2'; env.RL_DAILY.m.clear(); upstreamStat
 await call(req(GH, goodBody())); await call(req(GH, goodBody())); r = await call(req(GH, goodBody()));
 check('worker: per-day limit → 429 rate_day', r.status === 429 && r.body.error.code === 'rate_day');
 env.DAILY_LIMIT = '100'; env.RL_MINUTE.n = 0;
-r = await call(req(GH, null, '/v1beta/models/gemini-2.5-flash:generateContent', 'OPTIONS'));
+r = await call(req(GH, null, '/v1beta/models/gemini-flash-latest:generateContent', 'OPTIONS'));
 check('worker: preflight OK for test origin', r.status === 204 && r.cors === GH.Origin);
 r = await call(req(GH, goodBody(Math.ceil(2.2 * 1024 * 1024 * 4 / 3))));
 check('worker: oversized image → 413 too_big', r.status === 413 && r.body.error.code === 'too_big');
@@ -89,11 +89,12 @@ function gasSandbox({ key = 'SECRET-KEY', token = null, statuses = [] } = {}) {
   const post = (obj) => JSON.parse(sb.doPost({ postData: { contents: typeof obj === 'string' ? obj : JSON.stringify(obj) } }).text);
   return { sb, post, props, cache, fetches };
 }
-const msg = (extra = {}) => ({ v: 1, model: 'gemini-2.5-flash', request: goodBody(), clientId: 'abc123def456', ...extra });
+const msg = (extra = {}) => ({ v: 1, model: 'gemini-flash-latest', request: goodBody(), clientId: 'abc123def456', ...extra });
 
 let g = gasSandbox();
 r = g.post(msg());
-check('gas: happy path ok:true with Gemini data', r.ok === true && r.data.candidates && r.model === 'gemini-2.5-flash');
+check('gas: happy path ok:true with Gemini data', r.ok === true && r.data.candidates && r.model === 'gemini-flash-latest');
+check('gas: old clients asking for gemini-2.5-flash are mapped to the primary', gasSandbox().post(msg({ model: 'gemini-2.5-flash' })).model === 'gemini-flash-latest');
 check('gas: key sent as header from Script Properties, not in URL', g.fetches[0].opt.headers['x-goog-api-key'] === 'SECRET-KEY' && !g.fetches[0].url.includes('SECRET'));
 check('gas: output tokens capped', JSON.parse(g.fetches[0].opt.payload).generationConfig.maxOutputTokens === 4096);
 check('gas: doGet health reveals nothing secret', !g.sb.doGet().text.includes('SECRET') && JSON.parse(g.sb.doGet().text).configured === true);
@@ -106,7 +107,7 @@ g = gasSandbox({ token: 'tok' });
 check('gas: APP_TOKEN mismatch → forbidden', g.post(msg()).error.code === 'forbidden' && g.post(msg({ token: 'tok' })).ok === true);
 g = gasSandbox({ statuses: [404, 200] });
 r = g.post(msg());
-check('gas: gemini-2.5-flash 404 → fallback to gemini-flash-latest', r.ok && r.model === 'gemini-flash-latest' && g.fetches[1].url.includes('gemini-flash-latest'));
+check('gas: gemini-flash-latest 404 → fallback to gemini-3.5-flash-lite', r.ok && r.model === 'gemini-3.5-flash-lite' && g.fetches[1].url.includes('gemini-3.5-flash-lite'));
 g = gasSandbox({ statuses: [429] });
 check('gas: Gemini 429 → quota', g.post(msg()).error.code === 'quota');
 g = gasSandbox({ statuses: [400] });

@@ -6,8 +6,8 @@ Alternative to `relay-gas/` (Apps Script). Same job: keep the Gemini key out of 
 - Only accepts browsers whose `Origin` is `https://autoprod-dev.github.io` **and** whose `Referer` path
   starts with `/snootfood-test` (the app sends the full page URL to the relay for this), plus
   `http://localhost` / `127.0.0.1` while `ALLOW_LOCALHOST = "true"`.
-- Only `POST /v1beta/models/{gemini-2.5-flash | gemini-flash-latest | gemini-3.5-flash-lite}:generateContent`,
-  JSON, one image max (JPEG/PNG/WebP, ≤ 2 MB), no tools, output ≤ 4096 tokens. `gemini-2.5-flash` falls back to `gemini-flash-latest` on 404/5xx.
+- Only `POST /v1beta/models/{gemini-flash-latest | gemini-3.5-flash-lite}:generateContent`,
+  JSON, one image max (JPEG/PNG/WebP, ≤ 2 MB), no tools, output ≤ 4096 tokens. `gemini-flash-latest` falls back to `gemini-3.5-flash-lite` on 404/5xx.
 - 10 requests/minute per IP (Workers Rate Limiting binding, Free plan OK) and ~100/day per IP (KV counter;
   KV Free allows 1,000 writes/day, so that's also a ~1,000 requests/day overall ceiling).
 - Friendly JSON errors: `{ "error": { "code", "message" } }`. Google's raw errors are never passed through.

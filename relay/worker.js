@@ -16,8 +16,9 @@
 const ALLOWED_ORIGIN = 'https://autoprod-dev.github.io';
 const ALLOWED_PATH_PREFIX = '/snootfood-test';
 const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/;
-const ALLOWED_MODELS = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.5-flash-lite'];
-const FALLBACK_MODEL = 'gemini-flash-latest';   // used if gemini-2.5-flash is unavailable (404/5xx) for this key
+const ALLOWED_MODELS = ['gemini-flash-latest', 'gemini-3.5-flash-lite'];
+const PRIMARY_MODEL = 'gemini-flash-latest';     // gemini-2.5-flash is closed to new users
+const FALLBACK_MODEL = 'gemini-3.5-flash-lite';  // used if the primary returns 404/5xx
 const UPSTREAM = 'https://generativelanguage.googleapis.com';
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const MAX_BODY_BYTES = 3 * 1024 * 1024;   // 2 MB image ≈ 2.7 MB as base64, plus prompt
@@ -180,7 +181,7 @@ export default {
     let up;
     try {
       up = await call(m[1]);
-      if ((up.status === 404 || up.status >= 500) && m[1] === 'gemini-2.5-flash') up = await call(FALLBACK_MODEL);
+      if ((up.status === 404 || up.status >= 500) && m[1] === PRIMARY_MODEL) up = await call(FALLBACK_MODEL);
     } catch {
       return fail(502, 'upstream_error', origin);
     }

@@ -53,21 +53,21 @@ POST body (sent as `Content-Type: text/plain` so browsers skip the CORS prefligh
 Apps Script's 302 redirect to `script.googleusercontent.com`):
 
 ```json
-{ "v": 1, "model": "gemini-2.5-flash", "request": { "contents": [], "generationConfig": {} },
+{ "v": 1, "model": "gemini-flash-latest", "request": { "contents": [], "generationConfig": {} },
   "clientId": "random id from localStorage", "token": "optional APP_TOKEN" }
 ```
 
 Reply (always HTTP 200; Apps Script can't set status codes):
 
 ```json
-{ "ok": true, "model": "gemini-2.5-flash", "data": { "candidates": [] } }
+{ "ok": true, "model": "gemini-flash-latest", "data": { "candidates": [] } }
 { "ok": false, "error": { "code": "quota | too_big | bad_request | upstream | forbidden", "message": "friendly text" } }
 ```
 
 ## Limits and protection
 
-- Models: `gemini-2.5-flash`, falling back to `gemini-flash-latest` if 2.5 Flash returns 404/5xx
-  (Google currently limits 2.5 models to keys that already used them, so a brand-new key may hit the fallback).
+- Models: `gemini-flash-latest` (rolling alias, a Gemini 3.x Flash), falling back to `gemini-3.5-flash-lite`
+  on 404/5xx. `gemini-2.5-flash` is closed to new users, so requests for it are mapped to the primary.
 - Image: base64 ≤ 2.5 MB, max one image, text ≤ 20k chars, output ≤ 4096 tokens, no tools.
 - Global: 8 requests/minute and 200/day (day = Pacific time, matching the Gemini free-tier reset).
 - Per client (random id the app keeps in localStorage): soft 4/minute and 40/day. It's "soft" because a

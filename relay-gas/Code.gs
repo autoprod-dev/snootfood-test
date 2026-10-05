@@ -6,7 +6,7 @@
  *  - Deploy: web app, execute as the deploying user (the Autoprod account), access "Anyone" (anonymous).
  *  - Key: Script Properties -> GEMINI_API_KEY. Never in source, never returned to the client.
  *  - Request: POST, body = JSON sent as Content-Type text/plain (a "simple" request, so no CORS preflight):
- *      { "v": 1, "model": "gemini-2.5-flash", "request": { ...Gemini generateContent body... },
+ *      { "v": 1, "model": "gemini-flash-latest", "request": { ...Gemini generateContent body... },
  *        "clientId": "random id from the app's localStorage", "token": "optional APP_TOKEN" }
  *  - Response: always HTTP 200 (Apps Script can't set status codes), JSON:
  *      { "ok": true,  "data": { ...Gemini response... }, "model": "<model used>" }
@@ -19,8 +19,8 @@
  * light protection only. The real protection is the global limit + the Google-side quota on the key.
  */
 
-var MODEL_PRIMARY = 'gemini-2.5-flash';
-var MODEL_FALLBACK = 'gemini-flash-latest';
+var MODEL_PRIMARY = 'gemini-flash-latest';   // gemini-2.5-flash is closed to new users
+var MODEL_FALLBACK = 'gemini-3.5-flash-lite'; // only used if the primary returns 404/5xx
 var ALLOWED_MODELS = [MODEL_PRIMARY, MODEL_FALLBACK];
 var UPSTREAM = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
@@ -76,6 +76,7 @@ function doPost(e) {
     if (appToken && msg.token !== appToken) return fail_('forbidden');
 
     var model = String(msg.model || MODEL_PRIMARY);
+    if (model === 'gemini-2.5-flash') model = MODEL_PRIMARY;   // older clients
     if (ALLOWED_MODELS.indexOf(model) < 0) return fail_('bad_request');
 
     var v = validate_(msg.request);

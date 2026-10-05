@@ -19,7 +19,7 @@ export const APP = {
   //   • Google Apps Script web app (/relay-gas):  'https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec'
   //   • Cloudflare Worker (/relay):               'https://snootfood-relay.<subdomain>.workers.dev'
   // The app picks the right protocol from the URL. Leave empty ('') to stay in demo mode.
-  relayUrl: '',
+  relayUrl: 'https://script.google.com/macros/s/AKfycbyAmADXEFf9Ip28A72p-9Z-OuCOyktvXD9y71VwenmWAW6c3I7hz5y_hLVpPbuuPK_ZJw/exec',
   // Optional shared token for the Apps Script relay (must match APP_TOKEN in Script Properties).
   // It is visible to anyone who reads this file, so it is only light protection.
   relayToken: '',

@@ -37,8 +37,11 @@ export const PROVIDERS = {
   },
 };
 
-// The relay only ever talks to Gemini. It falls back to gemini-flash-latest if this model is unavailable.
-export const RELAY_MODEL = 'gemini-2.5-flash';
+// The relay only ever talks to Gemini. gemini-2.5-flash is closed to new users, so we use the
+// rolling alias (currently a Gemini 3.x Flash); the relay falls back to gemini-3.5-flash-lite on 404/5xx.
+export const RELAY_MODEL = 'gemini-flash-latest';
+// Gemini 3 models are tuned for the default temperature (1.0); lowering it can cause looping.
+const isGemini3 = (model) => /^gemini-(3|flash-latest|flash-lite-latest|pro-latest)/.test(String(model || ''));
 // Apps Script relay URLs look like https://script.google.com/macros/s/<id>/exec
 export const relayKind = (url = APP.relayUrl) => (!url ? null : /^https:\/\/script\.google(usercontent)?\.com\//.test(url) ? 'gas' : 'worker');
 
@@ -306,13 +309,13 @@ export async function postAppsScript(url, payload, signal) {
 
 const promptFor = (t, input) => t.prompt(input || {});
 
-function geminiBody(t, prompt, base64) {
+function geminiBody(t, prompt, base64, model) {
   const safety = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH', 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT'].map((category) => ({ category, threshold: 'BLOCK_LOW_AND_ABOVE' }));
   const parts = t.image ? [{ inlineData: { mimeType: 'image/jpeg', data: base64 } }, { text: prompt }] : [{ text: prompt }];
   return {
     systemInstruction: { parts: [{ text: t.system }] },
     contents: [{ role: 'user', parts }],
-    generationConfig: { responseMimeType: 'application/json', responseSchema: t.schema, temperature: t.temperature ?? 1.0, maxOutputTokens: t.maxTokens ?? 2048 },
+    generationConfig: { responseMimeType: 'application/json', responseSchema: t.schema, temperature: isGemini3(model) ? 1.0 : t.temperature ?? 1.0, maxOutputTokens: t.maxTokens ?? 2048 },
     safetySettings: safety,
   };
 }
@@ -329,13 +332,13 @@ function readGemini(data) {
 const ADAPTERS = {
   async gemini({ key, model, t, prompt, base64, signal }) {
     const url = `${PROVIDERS.gemini.host}/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-    return readGemini(await post(url, { 'x-goog-api-key': key }, geminiBody(t, prompt, base64), signal));
+    return readGemini(await post(url, { 'x-goog-api-key': key }, geminiBody(t, prompt, base64, model), signal));
   },
   // Same Gemini request body, but sent to our relay with no key. The relay adds the key server-side.
   async relay({ t, prompt, base64, signal }) {
     const kind = relayKind();
     if (!kind) throw new AIError(MESSAGES.noKey, 'auth');
-    const body = geminiBody(t, prompt, base64);
+    const body = geminiBody(t, prompt, base64, RELAY_MODEL);
     if (kind === 'gas') return readGemini(await postAppsScript(APP.relayUrl, { v: 1, model: RELAY_MODEL, request: body, clientId: clientId(), token: APP.relayToken || undefined }, signal));
     // Cloudflare Worker: the full page URL goes as Referer so it can check the request came from /snootfood-test.
     const url = `${APP.relayUrl.replace(/\/+$/, '')}/v1beta/models/${encodeURIComponent(RELAY_MODEL)}:generateContent`;

@@ -430,6 +430,54 @@ with sync_playwright() as p:
     pg.screenshot(path=str(SHOTS / 'qw6-daily-streak.png'))
     errs += derr; ctx.close()
 
+    # ── 13. QW8: install nudge (beforeinstallprompt simulated) + in-app browser hint ──
+    BIP = '''window.__fireBIP = (outcome) => { const e = new Event('beforeinstallprompt', { cancelable: true }); window.__prompted = 0;
+      e.prompt = () => { window.__prompted++; return Promise.resolve(); }; e.userChoice = Promise.resolve({ outcome }); window.dispatchEvent(e); return e.defaultPrevented; };'''
+    def inst_ctx(**extra):
+        c = browser.new_context(**{**PHONE, **extra}, accept_downloads=True); c.add_init_script(FORCE_DEMO); c.add_init_script(BIP); c.add_init_script(SHARE_MOCK)
+        e, _ = instrument(c, 'install'); return c, e
+    ctx, ierr = inst_ctx(); pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    check('beforeinstallprompt is deferred (preventDefault)', pg.evaluate("window.__fireBIP('accepted')"))
+    pg.wait_for_timeout(1500)
+    check('install nudge never shows on load', not pg.is_visible('#installBar'))
+    pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(1600)
+    check('…nor after the first result', not pg.is_visible('#installBar'))
+    pg.click('#againBtn'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_selector('#installBar:not([hidden])', timeout=4000)
+    check('nudge after the 2nd result: "Keep Chef Gerardo on your home screen…" [Add] [Not now]', 'Keep Chef Gerardo on your home screen for tomorrow’s Plate of the day?' in pg.inner_text('#installBar') and pg.is_visible('#installAdd') and pg.inner_text('#installLater') == 'Not now')
+    pg.screenshot(path=str(SHOTS / 'qw8-install-nudge.png'))
+    pg.click('#installAdd'); pg.wait_for_timeout(300)
+    check('[Add] opens the browser install prompt; accepted → never nudges again', pg.evaluate('window.__prompted') == 1 and not pg.is_visible('#installBar') and pg.evaluate("!!localStorage.getItem('snootfood.installed.v1')"))
+    ierr_all = list(ierr); ctx.close()
+    ctx, ierr = inst_ctx(); pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle'); pg.evaluate("window.__fireBIP('dismissed')")
+    pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(500)
+    pg.click('#shareBtn'); pg.wait_for_selector('#installBar:not([hidden])', timeout=4000)
+    check('nudge after the first share', pg.is_visible('#installBar'))
+    pg.click('#installLater'); pg.reload(); pg.wait_for_load_state('networkidle'); pg.evaluate("window.__fireBIP('dismissed')")
+    for s_ in ('noodles', 'beans'):
+        pg.click('#newBtn') if pg.is_visible('#newBtn') else None; pg.click(f'[data-sample={s_}]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(1600)
+    check('[Not now] → quiet for 30 days', not pg.is_visible('#installBar'))
+    ierr_all += ierr; ctx.close()
+    ctx, ierr = inst_ctx(); pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.click('#againBtn'); pg.wait_for_timeout(2000)
+    check('no install prompt available (non-iOS) → no nudge', not pg.is_visible('#installBar'))
+    ierr_all += ierr; ctx.close()
+    IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
+    ctx, ierr = inst_ctx(user_agent=IOS); pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(500); pg.click('#shareBtn'); pg.wait_for_selector('#installBar:not([hidden])', timeout=4000)
+    check('iOS Safari: Share ⬆︎ → “Add to Home Screen” instructions, no [Add] button', 'tap Share ⬆︎, then “Add to Home Screen.”' in pg.inner_text('#installBar') and not pg.is_visible('#installAdd'), pg.inner_text('#installBar'))
+    pg.wait_for_timeout(6500)
+    check('nudge hides itself after ~6 s', not pg.is_visible('#installBar'))
+    ierr_all += ierr; ctx.close()
+    ctx, ierr = inst_ctx(); ctx.add_init_script("const _mm = window.matchMedia.bind(window); window.matchMedia = (q) => q.includes('standalone') ? { matches: true, media: q, addEventListener() {}, removeEventListener() {} } : _mm(q);")
+    pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle'); pg.evaluate("window.__fireBIP('accepted')")
+    pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.click('#againBtn'); pg.wait_for_timeout(2000)
+    check('already installed (standalone) → no nudge', not pg.is_visible('#installBar'))
+    ierr_all += ierr; ctx.close()
+    ctx, ierr = inst_ctx(user_agent=IOS.replace('Safari/604.1', 'Instagram 300.0.0.0 (iPhone14,2; iOS 17_5)')); pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    check('Instagram in-app browser → "open in your browser" hint', pg.is_visible('#inAppHint') and 'Open in browser' in pg.inner_text('#inAppHint'))
+    ierr_all += ierr; ctx.close()
+    errs += ierr_all
+
     check('no console errors / page errors', not errs, ' | '.join(errs)[:500])
     browser.close()
 

@@ -270,3 +270,15 @@ details .field, details .check { margin-top: 10px; }
 .daily-plate { font-style: italic; }
 .daily-streak { display: inline-block; font-weight: 800; color: #c8102e; }
 .daily-streak.stamp { animation: stamp .6s cubic-bezier(.2,.9,.3,1.4) both; }
+
+/* QW8: install nudge + in-app browser hint */
+.install-bar[hidden], .inapp-hint[hidden] { display: none; }
+.install-bar { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 25; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; max-width: 520px; margin: 0 auto; padding: 12px 14px; border-radius: 18px; background: var(--espresso); color: var(--paper); box-shadow: 0 14px 40px rgba(0,0,0,.35); animation: rise .35s cubic-bezier(.2,.9,.3,1.2) both; }
+.install-bar img { width: 58px; height: auto; }
+.install-bar p { margin: 0; font: 600 .95rem/1.35 var(--sans); }
+.install-actions { grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; }
+.install-bar .btn { min-width: 92px; }
+.install-bar #installAdd { background: #c8102e; color: #fff; border-color: #c8102e; }
+.install-bar #installLater { background: transparent; color: var(--paper); border-color: rgba(246,239,225,.55); }
+.inapp-hint { display: flex; gap: 10px; align-items: center; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: #fff6d9; border: 1px dashed var(--gold); font: 500 .9rem/1.35 var(--sans); }
+.inapp-hint p { margin: 0; flex: 1; }

@@ -4,6 +4,7 @@ import { PROVIDERS, RELAY_MODEL, analyse, AIError } from './ai.js';
 import { renderCard, canvasToBlob, prepareCardAssets } from './card.js';
 import { decodeImage, resizeTo, toJpeg, photoCheck, FRIDGE_EDGE, FRIDGE_QUALITY } from './image.js';
 import { daily, bumpStreak, markShared } from './daily.js';
+import { maybeNudgeInstall, inAppHint } from './install.js';
 import { budget, spend, kitchenClosed, closeKitchen, nextResetLocal, ageOk, setAge } from './budget.js';
 
 const $ = (s) => document.querySelector(s);
@@ -384,9 +385,11 @@ function showChecklist() {
 }
 
 // ───────── Results ─────────
+let resultsThisSession = 0;
 function showResult() {
   const r = state.result, p = $('#panel');
   const st = bumpStreak();
+  if (++resultsThisSession === 2) setTimeout(() => maybeNudgeInstall('second-result'), 1200);
   refreshDaily(st.milestone);
   if (st.milestone) toast(`${st.count} days straight! ${APP.chef} is… mildly impressed.`);
   p.className = 'panel ' + state.mode;
@@ -521,7 +524,7 @@ const canShareFile = (file) => { try { return !!(navigator.share && navigator.ca
 function copyCaption(text) {   // resolves true/false; never throws
   try { return navigator.clipboard ? navigator.clipboard.writeText(text).then(() => true, () => false) : Promise.resolve(false); } catch { return Promise.resolve(false); }
 }
-function afterShare() { markShared(); /* QW8 maybeNudgeInstall('share') */ }
+function afterShare() { markShared(); maybeNudgeInstall('share'); }
 
 function share() {
   const file = state.card;
@@ -688,6 +691,7 @@ function init() {
   setMode(COPY[initial] ? initial : 'menu');   // also replaces the URL with #mode, so a reload doesn't repeat the challenge
   refreshDemoPill();
   refreshDaily();
+  inAppHint();
   if (state.challenge) { showChallengeBanner(state.challenge); try { localStorage.setItem(SEEN, '1'); } catch { /* fine */ } }
   else showTeaser();
   prepareCardAssets();

@@ -211,6 +211,18 @@ with sync_playwright() as p:
     check('streak: long gap reads as 0; shares counted', d['broken'] == 0 and d['shares'] == 2)
     check('service worker caches daily.js', "'daily.js'" in (ROOT / 'sw.js').read_text())
 
+    # ── QW8: manifest screenshots ──
+    man = json.loads((ROOT / 'manifest.webmanifest').read_text())
+    bad = []
+    for s_ in man.get('screenshots', []):
+        f = ROOT / s_['src']
+        if not f.exists(): bad.append(s_['src'] + ' missing'); continue
+        with Image.open(f) as im:
+            if f'{im.size[0]}x{im.size[1]}' != s_['sizes']: bad.append(f"{s_['src']} is {im.size}")
+    ff = [s_.get('form_factor') for s_ in man.get('screenshots', [])]
+    check('manifest: 2 narrow 1080×1920 + 1 wide 1280×800 screenshots, sizes match files, description kept', ff.count('narrow') == 2 and ff.count('wide') == 1 and not bad and man.get('description'), '; '.join(bad))
+    check('service worker caches install.js', "'install.js'" in (ROOT / 'sw.js').read_text())
+
     check('no page errors', not errs, ' | '.join(errs))
     browser.close()
 

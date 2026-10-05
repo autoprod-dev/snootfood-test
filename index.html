@@ -60,6 +60,7 @@
   <div class="demo-pill" id="demoPill" role="status">
     <strong>DEMO MODE</strong> · sample results, not a read of your photo. <button type="button" class="link" data-open-settings>Add a free key</button> to get the real thing.
   </div>
+  <div class="inapp-hint" id="inAppHint" role="note" hidden><p>For sharing and the home-screen app, open this page in your browser: tap <strong>⋯</strong>, then “Open in browser.”</p><button type="button" class="btn btn-small btn-ghost" aria-label="Dismiss">OK</button></div>
   <div class="kitchen-banner" id="kitchenBanner" role="status" hidden></div>
 
   <section class="intro" id="intro">
@@ -174,6 +175,11 @@
   </form>
 </dialog>
 
+<div class="install-bar" id="installBar" role="dialog" aria-label="Add Snootfood to your home screen" hidden>
+  <img src="img/chef-gerardo-fancy-menu.png" alt="" width="58" height="50">
+  <p id="installMsg"></p>
+  <div class="install-actions"><button class="btn btn-small btn-primary" id="installAdd" type="button">Add</button><button class="btn btn-small btn-ghost" id="installLater" type="button">Not now</button></div>
+</div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

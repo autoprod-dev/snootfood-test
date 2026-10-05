@@ -100,9 +100,13 @@ with sync_playwright() as p:
             ctx.add_init_script(FORCE_DEMO)
             sp = ctx.new_page(); sp.goto(base + "#" + mode); sp.wait_for_load_state("networkidle")
             sp.click(f"[data-sample={sample}]"); sp.wait_for_selector("#panel:not([hidden])"); sp.wait_for_timeout(900)
-            sp.evaluate("document.querySelector('#panel').scrollIntoView({block: 'start'}); window.scrollBy(0, -12)") if scale > 1 else None
+            sp.evaluate("document.querySelectorAll('.demo-banner, .demo-tag, #demoPill, .toast').forEach((e) => e.style.display = 'none')")   # store-style shots: no test chrome
+            sp.evaluate("document.querySelector('#photoWrap').scrollIntoView({block: 'start'}); window.scrollBy(0, -70)" if scale > 1 else "window.scrollTo(0, 0)")
             sp.wait_for_timeout(300)
-            sp.screenshot(path=str(root / "screenshots" / f"{name}.png"))
+            out = root / "screenshots" / f"{name}.png"
+            sp.screenshot(path=str(out))
+            from PIL import Image
+            Image.open(out).convert("RGB").quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.FLOYDSTEINBERG).save(out, optimize=True)
             ctx.close()
     b.close()
 print("ok", sorted(targets))

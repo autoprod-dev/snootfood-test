@@ -34,5 +34,28 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/narrow-roast.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Chef Gerardo roasts a plate of beans on toast: 4/10"
+    },
+    {
+      "src": "screenshots/narrow-menu.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Instant noodles turned into a fancy menu card"
+    },
+    {
+      "src": "screenshots/wide-roast.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Chef Roast on a big screen"
+    }
   ]
 }

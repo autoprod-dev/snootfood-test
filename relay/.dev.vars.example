@@ -1,0 +1,2 @@
+# Copy to .dev.vars for `npx wrangler dev` (local only, git-ignored). Never commit a real key.
+GEMINI_API_KEY=paste-a-test-key-here

@@ -1,0 +1,29 @@
+# Cloudflare Worker that relays Snootfood TEST requests to Gemini. See README.md in this folder.
+name = "snootfood-relay"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# Lets http://localhost and http://127.0.0.1 call the relay while testing. Set to "false" to lock it down.
+ALLOW_LOCALHOST = "true"
+# Requests per IP per day (approximate, KV-based).
+DAILY_LIMIT = "100"
+
+# 10 requests per minute per IP (Workers Rate Limiting binding; works on the Free plan).
+# namespace_id is any positive integer unique within your Cloudflare account.
+[[ratelimits]]
+name = "RL_MINUTE"
+namespace_id = "41001"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+# Daily counter. Create it with:  npx wrangler kv namespace create RL_DAILY
+# then paste the id it prints below (replacing the placeholder).
+[[kv_namespaces]]
+binding = "RL_DAILY"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Secret (NOT in this file):  npx wrangler secret put GEMINI_API_KEY

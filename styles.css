@@ -58,7 +58,10 @@ main { max-width: 720px; margin: 0 auto; padding: 14px 16px 24px; outline: none;
 .link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; font: inherit; cursor: pointer; }
 
 .speech { display: flex; gap: 12px; align-items: flex-end; margin: 6px 0 18px; }
-.intro-chef { flex: none; filter: drop-shadow(0 4px 6px rgba(0,0,0,.15)); animation: bob 3.2s ease-in-out infinite; }
+.intro-chef { flex: none; display: block; filter: drop-shadow(0 4px 6px rgba(0,0,0,.15)); animation: bob 3.2s ease-in-out infinite; transform-origin: 50% 100%; }
+/* width/height attributes give the aspect ratio; the height is fixed here, so nothing shifts while the art loads */
+.intro-chef img { display: block; height: 138px; width: auto; max-width: 44vw; object-fit: contain; object-position: bottom; }
+.speech[data-chef=menu] .intro-chef img { height: 124px; }
 .speech p {
   position: relative; margin: 0; background: #fff; padding: 14px 16px; border-radius: 18px 18px 18px 4px; box-shadow: var(--shadow);
   font: italic 500 1.12rem/1.4 var(--serif); color: var(--ink);
@@ -126,7 +129,13 @@ input[type=file]:focus-visible + label, label:has(+ input[type=file]:focus-visib
 .panel.roast h2 { text-align: left; color: #fff; font-style: normal; font-weight: 800; }
 .roast-quote { font: italic 500 1.08rem/1.5 var(--serif); border-left: 4px solid #ff5a3c; padding-left: 12px; }
 .good { color: #9fd49a; } .tip { color: #f2c46d; }
-.panel.roast .byline { font: 600 1.35rem var(--hand); color: #d9c9a8; text-align: right; margin: 0; }
+.panel.roast .byline { color: #d9c9a8; }
+/* Chef Gerardo signs every result */
+.chef-sign { display: flex; align-items: flex-end; justify-content: flex-end; gap: 4px; margin: 4px -8px -6px 0; }
+.chef-sign .byline { font: 600 1.4rem/1.1 var(--hand); margin: 0 0 14px; text-align: right; }
+.sign-chef img { display: block; height: 112px; width: auto; filter: drop-shadow(0 3px 4px rgba(0,0,0,.25)); }
+.panel.menu .chef-sign .byline { color: var(--gold-2); }
+.panel.fridge .chef-sign .byline { color: #f2c14e; }
 
 .panel.fridge { background: #1e352b; color: #f4f1e8; border: 10px solid #5b3a22; }
 .panel.fridge .eyebrow { color: #f2c14e; }
@@ -181,6 +190,8 @@ details .field, details .check { margin-top: 10px; }
   .result .loading, .result .error, .result .actions { grid-column: 2; }
   .intro { display: grid; grid-template-columns: 1.1fr 1fr; gap: 28px; align-items: start; }
   .intro .speech { grid-column: 1 / -1; }
+  .intro-chef img, .speech[data-chef=menu] .intro-chef img { height: 180px; }
+  .sign-chef img { height: 130px; }
   .samples { margin-top: 0; }
   .sample-list { grid-template-columns: repeat(2, 1fr); }
 }

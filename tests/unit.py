@@ -139,6 +139,19 @@ with sync_playwright() as p:
     OLD_CHEF = r'\b' + 'g' + 'us\b|' + 'crou' + 'ton'   # built in pieces so this file doesn't match itself
     old = [str(f.relative_to(ROOT)) for f in ROOT.rglob('*') if f.is_file() and f.suffix in ('.js', '.mjs', '.html', '.css', '.md', '.json', '.webmanifest', '.gs', '.py', '.toml', '.svg', '.txt') and not any(x in f.parts for x in ('.git', 'fonts', 'node_modules', 'shots')) and re.search(OLD_CHEF, f.read_text(errors='ignore'), re.I)]
     check('the old chef name is gone from every source file', not old, str(old))
+    art = pg.evaluate("async () => (await import('/config.js')).APP.chefArt")
+    from PIL import Image as _I
+    bad = []
+    for mode, a in art.items():
+        for ext in ('webp', 'png'):
+            f = ROOT / (a['file'] + '.' + ext)
+            if not f.exists() or f.stat().st_size > 80_000: bad.append(f'{f.name} missing or > 80 KB'); continue
+            im = _I.open(f).convert('RGBA')
+            if im.size != (a['w'], a['h']): bad.append(f'{f.name} is {im.size}, config says {(a["w"], a["h"])}')
+            if im.getpixel((2, 2))[3] != 0: bad.append(f'{f.name} corner not transparent')
+    check('Chef Gerardo art: webp + png per mode, ≤ 80 KB, sizes match config, transparent corners', not bad and set(art) == {'menu', 'roast', 'fridge'}, '; '.join(bad))
+    sw = (ROOT / 'sw.js').read_text()
+    check('service worker caches the chef art', 'img/chef-gerardo-${n}.webp' in sw and all(n in sw for n in ('fancy-menu', 'chef-roast', 'fridge-chef')))
 
     check('no page errors', not errs, ' | '.join(errs))
     browser.close()

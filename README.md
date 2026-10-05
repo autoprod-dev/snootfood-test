@@ -31,6 +31,6 @@ Edit `config.js`, then run `node tools/apply-config.mjs` to sync the page title 
 
 ## Credits
 
-Fonts: Playfair Display and Caveat (SIL Open Font License, see `fonts/OFL.txt`). Sample photos, icons and the chef character are original illustrations made for this project (`tools/svg`).
+Fonts: Playfair Display and Caveat (SIL Open Font License, see `fonts/OFL.txt`). Sample photos, icons and the small chef logo are original illustrations made for this project (`tools/svg`). The Chef Gerardo mascot art (snooty for Fancy Menu, sassy for Chef Roast, excited for Fridge Chef) lives in `img/` as WebP with alpha plus a PNG fallback; `tools/chef-art/cutout.py` rebuilds it from the white-background originals.
 
 This is a TEST build. It is not indexed by search engines, and it is for entertainment only.

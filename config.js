@@ -8,6 +8,12 @@ export const APP = {
   restaurant: 'The Snoot Room',
   chef: 'Chef Gerardo',
   chefShort: 'Gerardo',
+  // Chef Gerardo mascot art, one mood per feature. Each has a .webp (alpha) and a .png fallback, 512 px tall.
+  chefArt: {
+    menu: { file: 'img/chef-gerardo-fancy-menu', w: 588, h: 512, mood: 'snooty' },
+    roast: { file: 'img/chef-gerardo-chef-roast', w: 323, h: 512, mood: 'sassy' },
+    fridge: { file: 'img/chef-gerardo-fridge-chef', w: 383, h: 512, mood: 'excited' },
+  },
   brand: 'Autoprod',
   url: 'https://autoprod-dev.github.io/snootfood-test/',
   shortUrl: 'autoprod-dev.github.io/snootfood-test',

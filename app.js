@@ -5,6 +5,19 @@ import { renderCard, canvasToBlob, prepareCardAssets } from './card.js';
 import { decodeImage, resizeTo, toJpeg, photoCheck, FRIDGE_EDGE, FRIDGE_QUALITY } from './image.js';
 
 const $ = (s) => document.querySelector(s);
+const chefAlt = (mode) => `${APP.chef}, looking ${APP.chefArt[mode].mood}`;
+function chefPicture(mode, cls) {
+  const a = APP.chefArt[mode];
+  const pic = document.createElement('picture'); pic.className = cls;
+  const src = document.createElement('source'); src.type = 'image/webp'; src.srcset = a.file + '.webp';
+  const img = document.createElement('img'); img.src = a.file + '.png'; img.alt = chefAlt(mode); img.width = a.w; img.height = a.h; img.decoding = 'async';
+  pic.append(src, img);
+  return pic;
+}
+function chefSign(mode) {
+  const s = el('div', 'chef-sign'); s.append(el('p', 'byline', '— ' + APP.chef), chefPicture(mode, 'sign-chef'));
+  return s;
+}
 const STORE = 'snootfood.settings.v1';
 
 const COPY = {
@@ -287,17 +300,18 @@ function showResult() {
     const n = el('p', 'notes'); n.append(el('b', null, 'CHEF’S NOTES'), '“' + r.chefNotes + '”'); p.append(n);
     p.append(el('p', 'pairing', 'Pair it with: ' + r.pairing));
     if (r.spotted?.length) { const ul = el('ul', 'chips'); ul.setAttribute('aria-label', 'Spotted on your plate'); r.spotted.forEach((s) => ul.append(el('li', null, s))); p.append(ul); }
+    p.append(chefSign('menu'));
   } else if (state.mode === 'roast') {
     const top = el('div', 'roast-top');
     const sc = el('div', 'score'); sc.setAttribute('role', 'img'); sc.setAttribute('aria-label', `Score: ${r.score} out of 10`);
     sc.innerHTML = `<span aria-hidden="true">${r.score}<small>/10</small></span>`;
     top.append(sc, el('h2', null, r.headline)); p.append(top);
-    p.append(el('p', 'roast-quote', r.roast), el('p', 'good', '✓ ' + r.compliment), el('p', 'tip', 'Pro tip: ' + r.fix), el('p', 'byline', '— ' + APP.chef));
+    p.append(el('p', 'roast-quote', r.roast), el('p', 'good', '✓ ' + r.compliment), el('p', 'tip', 'Pro tip: ' + r.fix), chefSign('roast'));
   } else {
     p.append(el('h2', null, r.specialName), el('p', 'desc', r.description), el('p', 'ingr', 'Made with: ' + r.ingredients.join(' · ')));
     const ol = el('ol'); r.steps.forEach((s) => ol.append(el('li', null, s))); p.append(ol);
     const row = el('p'); row.append(el('span', 'fprice', r.price)); p.append(row);
-    p.append(el('p', 'fnote', '“' + r.note + '”'), el('p', 'safety', 'Quick reminder: check expiration dates and allergies before you cook. This is for fun, not a guaranteed recipe.'));
+    p.append(el('p', 'fnote', '“' + r.note + '”'), chefSign('fridge'), el('p', 'safety', 'Quick reminder: check expiration dates and allergies before you cook. This is for fun, not a guaranteed recipe.'));
   }
   if (r.isFood === false) p.prepend(el('p', 'error', 'Hmm, Chef’s not totally sure that’s food, but he rolled with it anyway.'));
   p.hidden = false;
@@ -364,6 +378,10 @@ function setMode(mode, focus = false) {
     if (on && focus) t.focus();
   });
   $('#introLine').innerHTML = COPY[mode].intro;
+  const art = APP.chefArt[mode], ic = $('#introChef');
+  $('#introChefSrc').srcset = art.file + '.webp';
+  ic.src = art.file + '.png'; ic.width = art.w; ic.height = art.h; ic.alt = chefAlt(mode);
+  document.querySelector('.intro .speech').dataset.chef = mode;
   $('#snapLabel').textContent = COPY[mode].snap;
   history.replaceState(null, '', '#' + mode);
   if (state.photo && !$('#result').hidden) { state.roll = 0; run(); }

@@ -75,6 +75,12 @@ with sync_playwright() as p:
     check('noindex meta present', 'noindex' in (pg.get_attribute('meta[name=robots]', 'content') or ''))
     check('demo pill visible without key', pg.is_visible('#demoPill'))
     pg.screenshot(path=str(SHOTS / 'phone-1-home.png'), full_page=True)
+    intro = {}
+    for m in ('menu', 'roast', 'fridge'):
+        pg.click(f'.modes [data-mode={m}]'); pg.wait_for_function("() => { const i = document.querySelector('#introChef'); return i.complete && i.naturalWidth > 0; }")
+        intro[m] = pg.evaluate("() => { const i = document.querySelector('#introChef'); return [i.alt, i.currentSrc.split('/').pop(), i.getBoundingClientRect().height]; }")
+    check('home: chef art swaps per mode (snooty / sassy / excited), fixed height, alt text', intro['menu'][0].endswith('snooty') and intro['roast'][0].endswith('sassy') and intro['fridge'][0].endswith('excited') and 'fancy-menu' in intro['menu'][1] and 'chef-roast' in intro['roast'][1] and all(v[2] > 100 for v in intro.values()), str(intro))
+    pg.click('.modes [data-mode=menu]')
     expect = {'menu': ('noodles', 'CHEF’S NOTES'), 'roast': ('beans', '/10'), 'fridge': ('fridge', 'Made with:')}
     for mode, (sample, marker) in expect.items():
         text, card = run_mode(pg, mode, sample, shot=f'phone-{ {"menu":2,"roast":3,"fridge":4}[mode] }-{mode}.png', card=f'card-{mode}.png')
@@ -82,6 +88,9 @@ with sync_playwright() as p:
         check(f'{mode}: demo banner says it is not a read of the photo', 'demo result' in text.lower() and ('not a read of your photo' in text or 'not what’s in your fridge' in text))
         check(f'{mode}: share card PNG 1080x1350', card_dims(card) == (1080, 1350), str(card_dims(card)))
         if mode == 'roast': check('roast: signed by Chef Gerardo', '— Chef Gerardo' in text, text[-120:].replace('\n', ' '))
+        sign = pg.evaluate("() => { const i = document.querySelector('#panel .sign-chef img'); return i && [i.complete && i.naturalWidth > 0, i.alt, i.getAttribute('width'), i.getAttribute('height'), i.currentSrc]; }")
+        mood = {'menu': 'snooty', 'roast': 'sassy', 'fridge': 'excited'}[mode]
+        check(f'{mode}: result shows Chef Gerardo ({mood}) art, loaded, with alt + size', bool(sign) and sign[0] and sign[1] == f'Chef Gerardo, looking {mood}' and sign[2] and sign[3], str(sign))
     text, card = run_mode(pg, 'roast', 'pie', card='card-roast-story.png', story=True)
     check('story-size card 1080x1920', card_dims(card) == (1080, 1920), str(card_dims(card)))
     # variety: "Another take" changes the result for an uploaded (non-sample) photo

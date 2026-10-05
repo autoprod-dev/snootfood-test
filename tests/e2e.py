@@ -81,6 +81,7 @@ with sync_playwright() as p:
         check(f'{mode}: demo result rendered', marker in text and 'DEMO' in text, text[:70].replace('\n', ' '))
         check(f'{mode}: demo banner says it is not a read of the photo', 'demo result' in text.lower() and ('not a read of your photo' in text or 'not what’s in your fridge' in text))
         check(f'{mode}: share card PNG 1080x1350', card_dims(card) == (1080, 1350), str(card_dims(card)))
+        if mode == 'roast': check('roast: signed by Chef Gerardo', '— Chef Gerardo' in text, text[-120:].replace('\n', ' '))
     text, card = run_mode(pg, 'roast', 'pie', card='card-roast-story.png', story=True)
     check('story-size card 1080x1920', card_dims(card) == (1080, 1920), str(card_dims(card)))
     # variety: "Another take" changes the result for an uploaded (non-sample) photo

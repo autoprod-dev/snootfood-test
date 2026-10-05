@@ -5,7 +5,7 @@
 Three modes:
 
 1. **Fancy Menu**: snap any meal (yes, even instant noodles) and get a fancy menu card with an over-the-top dish name, a playful description, made-up chef’s notes and a ridiculous price.
-2. **Chef Roast**: Chef Gus Crouton, the grumpy-but-secretly-sweet (fictional) head chef of The Snoot Room, scores your plating out of 10 and roasts it. Cheeky, strictly PG, and only about the food.
+2. **Chef Roast**: Chef Gerardo, the grumpy-but-secretly-sweet (fictional) head chef of The Snoot Room, scores your plating out of 10 and roasts it. Cheeky, strictly PG, and only about the food.
 3. **Fridge Chef**: snap your fridge, confirm the ingredient checklist it reads (tick, untick, edit, add), then get tonight’s special made only from what you confirmed, chalkboard style.
 
 Every result has a one-tap **Share** button that renders a 1080×1350 (or 1080×1920 Story) image card and opens the native share sheet where it’s supported, or downloads it everywhere else.

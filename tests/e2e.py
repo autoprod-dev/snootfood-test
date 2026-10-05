@@ -48,6 +48,8 @@ def run_mode(pg, mode, sample, shot=None, card=None, story=False):
     pg.click(f'.modes [data-mode={mode}]')
     pg.click(f'[data-sample={sample}]')
     pg.wait_for_selector('#panel:not([hidden])', timeout=10000)
+    if pg.is_visible('#cookBtn'):   # Fridge Chef with real AI: confirm the checklist first
+        pg.click('#cookBtn'); pg.wait_for_selector('#panel.fridge:not(.checklist):not([hidden])', timeout=10000)
     pg.wait_for_timeout(600)
     text = pg.inner_text('#panel')
     if story: pg.check('input[name=cardSize][value=story]')
@@ -69,10 +71,11 @@ with sync_playwright() as p:
     check('noindex meta present', 'noindex' in (pg.get_attribute('meta[name=robots]', 'content') or ''))
     check('demo pill visible without key', pg.is_visible('#demoPill'))
     pg.screenshot(path=str(SHOTS / 'phone-1-home.png'), full_page=True)
-    expect = {'menu': ('noodles', 'NOTES DU CHEF'), 'roast': ('beans', '/10'), 'fridge': ('fridge', 'With ')}
+    expect = {'menu': ('noodles', 'CHEF’S NOTES'), 'roast': ('beans', '/10'), 'fridge': ('fridge', 'Made with:')}
     for mode, (sample, marker) in expect.items():
         text, card = run_mode(pg, mode, sample, shot=f'phone-{ {"menu":2,"roast":3,"fridge":4}[mode] }-{mode}.png', card=f'card-{mode}.png')
         check(f'{mode}: demo result rendered', marker in text and 'DEMO' in text, text[:70].replace('\n', ' '))
+        check(f'{mode}: demo banner says it is not a read of the photo', 'demo result' in text.lower() and ('not a read of your photo' in text or 'not what’s in your fridge' in text))
         check(f'{mode}: share card PNG 1080x1350', card_dims(card) == (1080, 1350), str(card_dims(card)))
     text, card = run_mode(pg, 'roast', 'pie', card='card-roast-story.png', story=True)
     check('story-size card 1080x1920', card_dims(card) == (1080, 1920), str(card_dims(card)))
@@ -85,10 +88,10 @@ with sync_playwright() as p:
     seen = {first}
     for _ in range(3):
         pg.click('#againBtn'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(100); seen.add(pg.inner_text('#panel h2'))
-    check('upload works + green photo gets a green-tone dish', any(w in first for w in ('Jardin', 'Salade')), first)
+    check('upload works + green photo gets a green-tone dish', any(w in first for w in ('Garden', 'Salad')), first)
     check('"Another take" gives varied results', len(seen) >= 2, ' | '.join(seen))
     nat = pg.evaluate("() => { const i = document.querySelector('#photo'); return [i.naturalWidth, i.naturalHeight]; }")
-    check('upload resized client-side (≤1440 px preview)', max(nat) <= 1440, str(nat))
+    check('upload resized client-side (≤1600 px, no upscaling)', max(nat) <= 1600, str(nat))
     # keyboard tabs
     pg.click('#newBtn'); pg.focus('#tab-menu'); pg.keyboard.press('ArrowRight')
     check('arrow keys move between mode tabs', pg.get_attribute('#tab-roast', 'aria-selected') == 'true')
@@ -130,7 +133,7 @@ with sync_playwright() as p:
     pg.goto(BASE + '?source=pwa'); pg.wait_for_selector('#sampleList button', timeout=10000)
     check('offline: app shell loads', 'Snootfood' in pg.inner_text('header'))
     text, card = run_mode(pg, 'menu', 'pie')
-    check('offline: demo mode + share card work', 'NOTES DU CHEF' in text and card_dims(card) == (1080, 1350))
+    check('offline: demo mode + share card work', 'CHEF’S NOTES' in text and card_dims(card) == (1080, 1350))
     ctx.set_offline(False)
     errs += perrs
     ctx.close()
@@ -140,6 +143,7 @@ with sync_playwright() as p:
         return {
             'menu': {'isFood': True, 'dishName': 'Mock Soufflé de Test', 'description': 'A mocked description.', 'chefNotes': 'Mock notes.', 'price': '$999', 'pairing': 'Mock cordial', 'spotted': ['pie']},
             'roast': {'isFood': True, 'score': 12, 'headline': 'Mock headline', 'roast': 'Mock roast, damn.', 'compliment': 'Mock compliment', 'fix': 'Mock fix'},
+            'scan': {'isFood': True, 'photoQuality': 'good', 'summary': 'Mock haul', 'items': [{'name': 'eggs', 'quantity': 'about 6', 'confidence': 'high'}]},
             'fridge': {'isFood': True, 'specialName': 'Mock Special', 'description': 'Mock.', 'ingredients': ['eggs'], 'steps': ['a', 'b', 'c'], 'price': '$1', 'note': 'n'},
         }[mode]
     shapes = {
@@ -155,7 +159,7 @@ with sync_playwright() as p:
         def handler(route, req, shape=shape):
             body = req.post_data_json; captured.append((req.url, req.headers, body))
             txt = json.dumps(body)
-            mode = 'roast' if 'Rate the plating' in txt else 'fridge' if 'fridge contents' in txt else 'menu'
+            mode = 'roast' if 'Rate the plating' in txt else 'scan' if 'Scan these fridge contents' in txt else 'fridge' if 'Confirmed ingredients' in txt else 'menu'
             route.fulfill(status=200, headers={'access-control-allow-origin': '*', 'content-type': 'application/json'}, body=json.dumps(shape(json.dumps(mock_payload(mode)))))
         ctx.route(f'https://{host}/**', handler)
         pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
@@ -217,7 +221,7 @@ with sync_playwright() as p:
         pg.evaluate("localStorage.setItem('snootfood.settings.v1', JSON.stringify({provider:'gemini', keys:{gemini:'AIzaFAKE-not-a-real-key'}}))"); pg.reload()
         pg.click('[data-sample=noodles]'); pg.wait_for_selector('#error:not([hidden])', timeout=20000)
         msg = pg.inner_text('#error')
-        check('live Gemini from browser: CORS allowed, fake key rejected with friendly message', 'key was not accepted' in msg, msg[:90])
+        check('live Gemini from browser: CORS allowed, fake key rejected with friendly message', 'key didn’t work' in msg, msg[:90])
         ctx.close()
 
     check('no console errors / page errors', not errs, ' | '.join(errs)[:500])

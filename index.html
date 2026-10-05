@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en-AU">
+<html lang="en-US">
 <head>
 <meta charset="utf-8">
 <title>Snootfood (TEST) · Every meal deserves a menu.</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow, noarchive">
-<meta name="description" content="Photograph any meal and get a fine-dining menu card, a roast from a grumpy head chef, or tonight’s special from your fridge.">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://openrouter.ai https://api.anthropic.com https://api.openai.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="description" content="Snap any meal and get a fancy menu card, a cheeky roast from a grumpy chef, or tonight’s special straight from your fridge.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.workers.dev https://generativelanguage.googleapis.com https://openrouter.ai https://api.anthropic.com https://api.openai.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#1b1411">
 <meta name="color-scheme" content="light">
@@ -45,7 +45,7 @@
 
 <main id="main" tabindex="-1">
   <div class="demo-pill" id="demoPill" role="status">
-    <strong>DEMO MODE</strong> · sample results, no AI. <button type="button" class="link" data-open-settings>Add a free key</button> for real photo analysis.
+    <strong>DEMO MODE</strong> · sample results, not a read of your photo. <button type="button" class="link" data-open-settings>Add a free key</button> to get the real thing.
   </div>
 
   <section class="intro" id="intro">
@@ -65,7 +65,7 @@
     </div>
 
     <div class="samples">
-      <h2 class="samples-title">No meal handy? Try a sample</h2>
+      <h2 class="samples-title">Nothing to snap? Try one of ours</h2>
       <ul class="sample-list" id="sampleList"></ul>
     </div>
   </section>
@@ -84,7 +84,8 @@
         <span>Share</span>
       </button>
       <div class="actions-row">
-        <button class="btn btn-ghost" id="againBtn" type="button">Another take</button>
+        <button class="btn btn-ghost" id="againBtn" type="button">Another one!</button>
+        <button class="btn btn-ghost" id="editBtn" type="button" hidden>Edit ingredients</button>
         <button class="btn btn-ghost" id="newBtn" type="button">New photo</button>
       </div>
       <div class="size-toggle" role="radiogroup" aria-label="Share card size">
@@ -97,25 +98,25 @@
 </main>
 
 <footer class="foot">
-  <p>A playful <span data-brand>Autoprod</span> experiment. For entertainment only; prices are not real and nothing here is cooking, nutrition or food-safety advice.</p>
-  <p class="foot-small">In demo mode your photo never leaves this device. With your own key, the photo goes only to the AI provider you choose. <span data-test-note>This is a TEST build.</span></p>
+  <p>A just-for-fun <span data-brand>Autoprod</span> experiment. Prices are totally made up, and nothing here is cooking, nutrition or food-safety advice.</p>
+  <p class="foot-small">In demo mode, your photo never leaves your device. With real AI on, it goes only to the AI provider doing the reading. <span data-test-note>This is a TEST build.</span></p>
 </footer>
 
 <dialog id="settings" aria-labelledby="settingsTitle">
   <form method="dialog" class="settings-form" id="settingsForm">
     <h2 id="settingsTitle">Settings</h2>
-    <p class="muted">The app works instantly in <strong>demo mode</strong> with canned results. For real photo analysis, paste your own AI key. It is free with Google Gemini.</p>
+    <p class="muted">The app works right away in <strong>demo mode</strong> with sample results. Want it to actually read your photos? Paste your own AI key. Google Gemini’s is free.</p>
     <label class="field">Provider
       <select id="provider"></select>
     </label>
     <label class="field">Your API key
       <span class="key-row">
-        <input type="password" id="apiKey" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="Paste key here">
+        <input type="password" id="apiKey" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="Paste your key here">
         <button type="button" class="btn btn-small" id="toggleKey" aria-pressed="false">Show</button>
       </span>
       <span class="hint" id="keyHint"></span>
     </label>
-    <p class="get-key"><a id="keyLink" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Get a free key</a> <span class="muted">(opens the provider’s site)</span></p>
+    <p class="get-key"><a id="keyLink" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Get a free key</a> <span class="muted">(opens the provider’s website)</span></p>
     <details>
       <summary>Advanced</summary>
       <label class="field">Model
@@ -126,9 +127,9 @@
     <div class="privacy">
       <h3>Privacy</h3>
       <ul>
-        <li>Your key is saved only in this browser (localStorage) on this device. It is never sent to us, there is no server of ours involved.</li>
-        <li>When a key is set, each photo is resized on your device and sent directly to the provider you chose, under that provider’s terms. Free tiers (such as Gemini’s) may use your inputs to improve their products, so don’t snap anything private.</li>
-        <li>Use a key you can revoke, and remove it below on shared devices.</li>
+        <li>Your key is saved only in this browser (localStorage) on this device. It never gets sent to us, and no server of ours is involved.</li>
+        <li>With a key set, each photo is resized on your device and sent straight to the provider you picked, under their terms. Free tiers (like Gemini’s) may use your inputs to improve their products, so don’t snap anything private.</li>
+        <li>Use a key you can cancel anytime, and remove it below if you’re on a shared device.</li>
       </ul>
     </div>
     <div class="settings-actions">

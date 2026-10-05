@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 .DS_Store
 shots/
+
+# relay local secrets
+relay/.dev.vars
+relay/.wrangler/
+relay/node_modules/

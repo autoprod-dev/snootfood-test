@@ -187,3 +187,36 @@ details .field, details .check { margin-top: 10px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Demo banner on every demo result: makes it obvious the result isn't a read of your photo */
+.demo-banner { background: #fff3c4; color: #3d2e12; border: 2px dashed #c99a1e; border-radius: 12px; padding: 10px 12px; margin: 0 0 14px; font: 500 .9rem/1.4 var(--sans); text-align: left; }
+.demo-banner strong { color: #8a2a0a; }
+#editBtn { grid-column: 1 / -1; }
+
+/* Fridge Chef step 1: editable ingredient checklist */
+.panel.checklist .ck-help { font-size: .88rem; color: #cfe3d4; text-align: center; }
+.ck-warning { background: #fff3c4; color: #3d2e12; border-radius: 10px; padding: 9px 12px; font-size: .9rem; }
+.checklist { list-style: none; padding: 0; margin: 10px 0 12px; display: grid; gap: 8px; }
+.ck-item { display: grid; grid-template-columns: 32px minmax(0, 1fr) 40px; grid-template-areas: "cb name del" ". meta meta"; align-items: center; gap: 4px 8px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 8px 8px 8px 10px; }
+.ck-item.conf-low { border-style: dashed; border-color: #f2c14e; }
+.ck-item.off { opacity: .6; }
+.ck-item.off .ck-name { text-decoration: line-through; }
+.ck-check { grid-area: cb; width: 24px; height: 24px; accent-color: #f2c14e; margin: 0; cursor: pointer; }
+.ck-name { grid-area: name; min-width: 0; width: 100%; font: 600 1.05rem/1.2 var(--sans); color: #fff; background: transparent; border: 0; border-bottom: 1px dashed rgba(255,255,255,.35); padding: 6px 2px; }
+.ck-name:focus { outline: none; border-bottom: 2px solid #f2c14e; }
+.ck-del { grid-area: del; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); background: transparent; color: #f4f1e8; font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.ck-del:hover { background: rgba(255,255,255,.1); }
+.ck-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .8rem; color: #cfe3d4; }
+.ck-qty { width: 9.5em; max-width: 100%; font: 500 .85rem var(--sans); color: #f4f1e8; background: rgba(0,0,0,.2); border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 4px 8px; }
+.ck-qty::placeholder, .ck-add input::placeholder { color: #a9c2b1; }
+.ck-conf { font: 700 .68rem/1 var(--sans); letter-spacing: .06em; text-transform: uppercase; padding: 4px 7px; border-radius: 999px; }
+.ck-conf.high { background: rgba(159,212,154,.2); color: #b9e6b4; }
+.ck-conf.medium { background: rgba(242,193,78,.18); color: #f6d58a; }
+.ck-conf.low { background: #f2c14e; color: #2a1f1a; }
+.ck-note { font-style: italic; opacity: .85; }
+.ck-add { display: flex; gap: 8px; margin: 0 0 14px; }
+.ck-add input { flex: 1; min-width: 0; font: 500 1rem var(--sans); color: #fff; background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.3); border-radius: 10px; padding: 10px 12px; }
+.ck-add .btn-small { min-height: 44px; }
+.cook-btn { width: 100%; background: #f2c14e; color: #2a1f1a; box-shadow: 0 8px 20px rgba(242,193,78,.3); }
+.cook-btn:disabled { opacity: .55; cursor: not-allowed; }
+.ck-retake { width: 100%; margin-top: 8px; color: #f4f1e8; border-color: rgba(255,255,255,.3); }

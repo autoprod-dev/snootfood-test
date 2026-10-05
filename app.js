@@ -407,6 +407,8 @@ function showResult() {
     const sc = el('div', 'score'); sc.setAttribute('role', 'img'); sc.setAttribute('aria-label', `Score: ${r.score} out of 10`);
     sc.innerHTML = `<span aria-hidden="true">${r.score}<small>/10</small></span>`;
     top.append(sc, el('h2', null, r.headline)); p.append(top);
+    const vs = challengeVs();
+    if (vs) p.append(el('p', 'challenge-line ' + (vs.mine > vs.theirs ? 'won' : vs.mine < vs.theirs ? 'lost' : 'tie'), challengeLine(vs)));
     p.append(el('p', 'roast-quote', r.roast), el('p', 'good', '✓ ' + r.compliment), el('p', 'tip', 'Pro tip: ' + r.fix), chefSign('roast'));
   } else {
     p.append(el('h2', null, r.specialName), el('p', 'desc', r.description), el('p', 'ingr', 'Made with: ' + r.ingredients.join(' · ')));
@@ -416,6 +418,7 @@ function showResult() {
   }
   if (r.isFood === false) p.prepend(el('p', 'error', 'Hmm, Chef’s not totally sure that’s food, but he rolled with it anyway.'));
   p.hidden = false;
+  if (state.challenge?.mode === state.mode) $('#challengeBanner').hidden = true;
   $('#actions').hidden = false;
   $('#shareBtn').hidden = false;
   $('#editBtn').hidden = !(state.mode === 'fridge' && state.source === 'ai' && state.fridge);
@@ -427,10 +430,11 @@ function showResult() {
 // ───────── Share card ─────────
 const cardSize = () => document.querySelector('input[name=cardSize]:checked').value;
 async function prerenderCard() {
-  const key = JSON.stringify([state.mode, state.result, cardSize()]);
+  const opts = { story: cardSize() === 'story', challenge: challengeVs() };
+  const key = JSON.stringify([state.mode, state.result, opts]);
   if (state.cardKey === key && state.card) return state.card;
   state.cardKey = key; state.card = null;
-  const canvas = await renderCard(state.mode, state.result, state.photo, { story: cardSize() === 'story' });
+  const canvas = await renderCard(state.mode, state.result, state.photo, opts);
   const blob = await canvasToBlob(canvas);
   if (state.cardKey !== key) return null;
   const name = `${APP.name.toLowerCase()}-${state.mode}-${Date.now().toString(36)}.png`;
@@ -442,7 +446,59 @@ async function prerenderCard() {
 // ───────── Share (QW2) ─────────
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const MODE_TAG = { roast: '#RateMyPlate', menu: '#FancyMenu', fridge: '#FridgeChef' };
-const challengeUrl = () => APP.url;   // QW3 adds the challenge params
+
+// ───────── Challenge link (QW3) ─────────
+const priceDigits = (price) => { const m = String(price || '').match(/\d[\d,]*/); const d = m ? m[0].replace(/,/g, '') : ''; return /^\d{1,6}$/.test(d) ? d : ''; };
+function challengeUrl() {
+  const r = state.result;
+  if (!r) return APP.url;
+  let q = '?challenge=' + state.mode;
+  if (state.mode === 'roast') q += '&s=' + Math.max(0, Math.min(10, Math.round(Number(r.score) || 0)));
+  if (state.mode === 'menu' && priceDigits(r.price)) q += '&p=' + priceDigits(r.price);
+  return APP.url + q;
+}
+// Values come from the URL: allow-list the mode, clamp the numbers, and only ever render them with textContent.
+function readChallenge() {
+  const q = new URLSearchParams(location.search);
+  const mode = q.get('challenge');
+  if (!['roast', 'menu', 'fridge'].includes(mode)) return null;
+  const c = { mode, s: null, p: null };
+  if (mode === 'roast' && /^\d{1,2}$/.test(q.get('s') || '')) c.s = Math.min(10, Number(q.get('s')));
+  if (mode === 'menu' && /^\d{1,6}$/.test(q.get('p') || '')) c.p = q.get('p');
+  return c;
+}
+function showChallengeBanner(c) {
+  const b = $('#challengeBanner'); b.replaceChildren();
+  const p = document.createElement('p');
+  const strong = (t) => el('strong', null, t);
+  if (c.mode === 'roast' && c.s != null) p.append('Your friend scored ', strong(`${c.s}/10`), ` with ${APP.chef}. Snap your plate and see if you can beat it.`);
+  else if (c.mode === 'roast') p.append(`Your friend got roasted by ${APP.chef}. Snap your plate and see how yours does.`);
+  else if (c.mode === 'menu' && c.p) p.append('Your friend’s dinner was priced at ', strong('$' + Number(c.p).toLocaleString('en-US')), '. Can yours get fancier?');
+  else if (c.mode === 'menu') p.append('Your friend’s dinner got the fancy menu treatment. Can yours get fancier?');
+  else p.append('Your friend’s fridge made tonight’s special. Raid yours.');
+  b.append(el('span', 'challenge-tag', 'Challenge'), p);
+  b.hidden = false;
+}
+function challengeVs() {   // roast only: { mine, theirs } when this result answers a friend's score
+  const c = state.challenge;
+  if (!c || c.mode !== 'roast' || c.s == null || state.mode !== 'roast' || !state.result) return null;
+  return { mine: Number(state.result.score), theirs: c.s };
+}
+function challengeLine(vs) {
+  if (vs.mine > vs.theirs) return `You beat your friend: ${vs.mine} vs ${vs.theirs} 🏆`;
+  if (vs.mine < vs.theirs) return `Your friend wins this round: ${vs.theirs} vs ${vs.mine}`;
+  return `Dead even with your friend: ${vs.mine} vs ${vs.theirs}`;
+}
+function challengeShare() {
+  const r = state.result; if (!r) return;
+  const line = state.mode === 'roast' ? `${APP.chef} gave my plate a ${r.score}/10. Think your plate can beat a ${r.score}/10?`
+    : state.mode === 'menu' ? `${APP.chef} priced my dinner at ${r.price}. Can yours get fancier?`
+    : `My fridge just made tonight’s special with ${APP.chef}. Raid yours:`;
+  const url = challengeUrl(), note = $('#shareNote');
+  const fallback = () => copyCaption(`${line} ${url}`).then((ok) => { note.textContent = ok ? 'Challenge link copied! Paste it in the group chat.' : `Send this link: ${url}`; });
+  if (navigator.share) navigator.share({ text: line, url }).then(() => { note.textContent = 'Challenge sent. May the best plate win.'; }).catch((e) => { if (e?.name !== 'AbortError' && e?.name !== 'InvalidStateError') fallback(); });
+  else fallback();
+}
 const dailyTag = () => '';            // QW6 adds "Snootfood #12 🔥3"
 
 function caption() {
@@ -510,6 +566,7 @@ function download(file) {
 function setMode(mode, focus = false) {
   state.mode = mode;
   document.body.dataset.mode = mode;
+  if (state.challenge && state.challenge.mode !== mode) $('#challengeBanner').hidden = true;
   document.querySelectorAll('.modes [role=tab]').forEach((t) => {
     const on = t.dataset.mode === mode;
     t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1;
@@ -521,7 +578,7 @@ function setMode(mode, focus = false) {
   ic.src = art.file + '.png'; ic.width = art.w; ic.height = art.h; ic.alt = chefAlt(mode);
   document.querySelector('.intro .speech').dataset.chef = mode;
   $('#snapLabel').textContent = COPY[mode].snap;
-  history.replaceState(null, '', '#' + mode);
+  history.replaceState(null, '', location.pathname + '#' + mode);
   if (state.photo && !$('#result').hidden) { state.roll = 0; run({ demoOnly: true }); }
 }
 
@@ -584,6 +641,7 @@ function init() {
     $(id).addEventListener('change', (e) => { const f = e.target.files?.[0]; if (f) usePhoto(f); e.target.value = ''; });
   }
   $('#shareBtn').onclick = share;
+  $('#challengeBtn').onclick = challengeShare;
   $('#againBtn').onclick = () => { state.roll++; run(); };
   $('#editBtn').onclick = () => { if (state.fridge) { state.fridge.confirmed = false; showChecklist(); } };
   $('#newBtn').onclick = () => { state.ctrl?.abort(); clearInterval(retryTimer); setNote(''); setBusy(false); $('#result').hidden = true; $('#intro').hidden = false; state.photo = null; state.fridge = null; window.scrollTo({ top: 0, behavior: 'smooth' }); };
@@ -613,10 +671,12 @@ function init() {
     saveSettings(); refreshDemoPill(); toast('Done! Key removed from this device.');
   };
 
-  const initial = location.hash.slice(1);
-  setMode(COPY[initial] ? initial : 'menu');
+  state.challenge = readChallenge();
+  const initial = state.challenge?.mode || location.hash.slice(1);
+  setMode(COPY[initial] ? initial : 'menu');   // also replaces the URL with #mode, so a reload doesn't repeat the challenge
   refreshDemoPill();
-  showTeaser();
+  if (state.challenge) { showChallengeBanner(state.challenge); try { localStorage.setItem(SEEN, '1'); } catch { /* fine */ } }
+  else showTeaser();
   prepareCardAssets();
 
   if ('serviceWorker' in navigator) {

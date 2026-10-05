@@ -308,7 +308,7 @@ with sync_playwright() as p:
     # ── 9. QW2: one-tap share (Web Share mocked; demo only) ──
     SHARE_MOCK = '''window.__shares = []; window.__shareMode = 'ok';
       Object.defineProperty(navigator, 'canShare', { configurable: true, value: (d) => !!(d && d.files && d.files.length) });
-      Object.defineProperty(navigator, 'share', { configurable: true, value: (d) => { window.__shares.push({ files: (d.files || []).map((f) => f.name), title: d.title, text: d.text, keys: Object.keys(d).sort() });
+      Object.defineProperty(navigator, 'share', { configurable: true, value: (d) => { window.__shares.push({ files: (d.files || []).map((f) => f.name), title: d.title, text: d.text, url: d.url, keys: Object.keys(d).sort() });
         return window.__shareMode === 'ok' ? Promise.resolve() : Promise.reject(new DOMException('mock', window.__shareMode)); } });'''
     def share_ctx(**extra):
         c = browser.new_context(**{**PHONE, **extra}, accept_downloads=True); c.add_init_script(FORCE_DEMO); c.add_init_script(SHARE_MOCK)
@@ -348,6 +348,44 @@ with sync_playwright() as p:
     pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(800)
     check('no Web Share (desktop Linux Chromium) → button says "Save image"', pg.inner_text('#shareBtn span') == 'Save image', pg.inner_text('#shareBtn span'))
     ctx.close()
+
+    # ── 10. QW3: challenge links ──
+    ctx, serrs = share_ctx()
+    pg = ctx.new_page(); dialogs = []; pg.on('dialog', lambda d: (dialogs.append(d.message), d.dismiss()))
+    pg.goto(BASE + '?challenge=roast&s=4'); pg.wait_for_load_state('networkidle')
+    check('challenge link: roast tab, banner "Your friend scored 4/10", no teaser', pg.get_attribute('#tab-roast', 'aria-selected') == 'true' and 'Your friend scored 4/10 with Chef Gerardo' in pg.inner_text('#challengeBanner') and not pg.is_visible('#teaser'), pg.inner_text('#challengeBanner'))
+    check('challenge link: query replaced with #roast (reload won’t repeat it)', pg.evaluate('location.search') == '' and pg.evaluate('location.hash') == '#roast', pg.url)
+    pg.screenshot(path=str(SHOTS / 'qw3-challenge-banner.png'))
+    pg.click('[data-sample=beans]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(800)
+    score = int(pg.evaluate("document.querySelector('#panel .score span').firstChild.textContent"))
+    line = pg.inner_text('#panel .challenge-line')
+    want = f'You beat your friend: {score} vs 4' if score > 4 else f'Your friend wins this round: 4 vs {score}' if score < 4 else 'Dead even'
+    check('challenge answered: beat/lose line in the panel', want in line and not pg.is_visible('#challengeBanner'), line)
+    pg.screenshot(path=str(SHOTS / 'qw3-challenge-result.png'), full_page=True)
+    with pg.expect_download() as d: pg.evaluate("() => { const f = window.__shareMode; window.__shareMode = 'NotAllowedError'; document.querySelector('#shareBtn').click(); }")
+    d.value.save_as(SHOTS / 'qw3-card-challenge-sticker.png')
+    from PIL import Image
+    with Image.open(SHOTS / 'qw3-card-challenge-sticker.png') as im: px = im.convert('RGB').getpixel((min(1080 - 160, 1080 // 2 + 380), 230))
+    check('challenge sticker drawn on the roast card', (score > 4 and px[0] > 230 and px[1] > 180 and px[2] < 140) or (score <= 4 and min(px) > 220), str(px))
+    pg.evaluate("window.__shareMode = 'ok'; window.__shares = []"); pg.click('#challengeBtn'); pg.wait_for_function("() => window.__shares.length === 1")
+    sh = pg.evaluate('window.__shares[0]')
+    check('"Roast a friend’s plate": text + challenge link only, no file', sh['keys'] == ['text', 'url'] and sh['url'].endswith(f'?challenge=roast&s={score}') and f'Think your plate can beat a {score}/10?' in sh['text'], str(sh))
+    pg.evaluate("window.__shares = []"); pg.click('#shareBtn'); pg.wait_for_function("() => window.__shares.length === 1")
+    check('card caption carries the challenge link', f'?challenge=roast&s={score}' in pg.evaluate('window.__shares[0].text'))
+    pg.reload(); pg.wait_for_load_state('networkidle')
+    check('reload: no challenge banner', not pg.is_visible('#challengeBanner'))
+    for q, ok in (('?challenge=menu&p=189', 'priced at $189'), ('?challenge=fridge', 'fridge made tonight’s special'), ('?challenge=roast&s=99', 'scored 10/10'),
+                  ('?challenge=roast&s=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E', 'got roasted by Chef Gerardo'), ('?challenge=%3Cscript%3E', None)):
+        pg.goto(BASE + q); pg.wait_for_load_state('networkidle')
+        txt = pg.inner_text('#challengeBanner') if pg.is_visible('#challengeBanner') else None
+        check(f'challenge param {q[:40]} → {"banner: " + ok if ok else "ignored"}', (ok in txt if ok else txt is None) and not pg.query_selector('#challengeBanner img, #challengeBanner script'), str(txt))
+    pg.goto(BASE + '?challenge=menu&p=189'); pg.wait_for_load_state('networkidle'); pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(500)
+    pg.evaluate("window.__shares = []"); pg.click('#challengeBtn'); pg.wait_for_function("() => window.__shares.length === 1")
+    import re as _re
+    price = _re.search(r'\d[\d,]*', pg.inner_text('#panel .price')).group(0).replace(',', '')
+    check('menu challenge link carries this dinner’s price digits', pg.evaluate('window.__shares[0].url').endswith('?challenge=menu&p=' + price), pg.evaluate('window.__shares[0].url') + ' vs ' + price)
+    check('no alert() from URL params', not dialogs, str(dialogs))
+    errs += serrs; ctx.close()
 
     check('no console errors / page errors', not errs, ' | '.join(errs)[:500])
     browser.close()

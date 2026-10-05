@@ -253,3 +253,14 @@ details .field, details .check { margin-top: 10px; }
 .teaser h3 { margin: 0 0 4px; font: 800 1.05rem/1.2 var(--serif); color: #fff; }
 .teaser .roast-quote { margin: 0; font-size: .92rem; }
 .teaser-cta { margin-top: 12px; width: 100%; background: #c8102e; color: #fff; border-color: #c8102e; }
+
+/* QW3: challenge link */
+.challenge-banner[hidden] { display: none; }
+.challenge-banner { display: flex; gap: 12px; align-items: center; margin: 0 0 14px; padding: 12px 14px; border-radius: 14px; background: #17110f; color: #f3e9dc; box-shadow: var(--shadow); animation: rise .5s cubic-bezier(.2,.9,.3,1.2) both; }
+.challenge-banner p { margin: 0; font: 500 .98rem/1.4 var(--sans); }
+.challenge-banner strong { color: #ffcf5a; font-weight: 800; }
+.challenge-tag { flex: none; padding: 6px 9px; border-radius: 8px; background: #ff5a3c; color: #fff; font: 800 .7rem/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; transform: rotate(-4deg); }
+.challenge-line { margin: 0 0 12px; padding: 8px 12px; border-radius: 10px; font: 800 1rem/1.3 var(--sans); text-align: center; }
+.challenge-line.won { background: #ffcf5a; color: #2a1f1a; }
+.challenge-line.lost, .challenge-line.tie { background: #2c2220; color: #f3e9dc; border: 1px solid #ff5a3c; }
+.challenge-btn { width: 100%; }

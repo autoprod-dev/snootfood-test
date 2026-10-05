@@ -141,7 +141,7 @@ function spaced(ctx, text, x, y, spacing) {
 }
 
 // ───────────── Fancy Menu ─────────────
-function menuCard(ctx, W, H, r, photo) {
+function menuCard(ctx, W, H, r, photo, opts = {}) {
   const g = ctx.createRadialGradient(W / 2, H * 0.4, 100, W / 2, H / 2, H * 0.8);
   g.addColorStop(0, '#fbf6ea'); g.addColorStop(1, '#e8dcc2');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
@@ -197,7 +197,7 @@ function menuCard(ctx, W, H, r, photo) {
 }
 
 // ───────────── Chef Roast ─────────────
-function roastCard(ctx, W, H, r, photo) {
+function roastCard(ctx, W, H, r, photo, opts = {}) {
   ctx.fillStyle = '#16100e'; ctx.fillRect(0, 0, W, H);
   const g = ctx.createRadialGradient(W / 2, H * 0.3, 50, W / 2, H * 0.3, H * 0.75);
   g.addColorStop(0, 'rgba(200,40,30,.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -238,6 +238,7 @@ function roastCard(ctx, W, H, r, photo) {
   ctx.font = `800 30px ${SERIF}`; ctx.fillText('/10', r.score === 10 ? 52 : 44, 26);
   ctx.restore();
   drawChef(ctx, 'roast', W / 2 - photoW / 2 - 18, top + photoH + 36, H > 1500 ? 400 : 310);
+  if (opts.challenge) challengeSticker(ctx, Math.min(W - 160, sx), Math.max(150, top + 40), opts.challenge);
 
   let y = top + photoH + 80 + Math.max(0, (bottom - top - photoH - textH - 80) / 2.4);
   ctx.fillStyle = '#ffffff';
@@ -253,8 +254,25 @@ function roastCard(ctx, W, H, r, photo) {
   footer(ctx, W, H, { ink: '#ffffff', sub: '#b9a99a' });
 }
 
+// "You beat your friend 7 vs 4" sticker for challenge answers (QW3)
+function challengeSticker(ctx, cx, cy, { mine, theirs }) {
+  const won = mine > theirs, tie = mine === theirs;
+  const top = won ? 'YOU BEAT YOUR FRIEND' : tie ? 'DEAD EVEN WITH YOUR FRIEND' : 'YOUR FRIEND WINS';
+  const big = won || tie ? `${mine} vs ${theirs}` : `${theirs} vs ${mine}`;
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(0.07);
+  ctx.font = `800 22px ${SERIF}`; const w = Math.max(230, ctx.measureText(top).width + 44);
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 8;
+  roundRect(ctx, -w / 2, -56, w, 112, 18); ctx.fillStyle = won ? '#ffcf5a' : '#f7f2ea'; ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = won ? '#2a1f1a' : '#c8102e'; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); roundRect(ctx, -w / 2 + 8, -48, w - 16, 96, 12); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#2a1f1a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(top, 0, -22);
+  ctx.font = `800 46px ${SERIF}`; ctx.fillStyle = won ? '#8c1c13' : '#2a1f1a'; ctx.fillText(big, 0, 20);
+  ctx.restore();
+}
+
 // ───────────── Fridge Chef (chalkboard special) ─────────────
-function fridgeCard(ctx, W, H, r, photo) {
+function fridgeCard(ctx, W, H, r, photo, opts = {}) {
   ctx.fillStyle = '#5b3a22'; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#1e352b'; ctx.fillRect(30, 30, W - 60, H - 60);
   for (let i = 0; i < 9; i++) {
@@ -318,13 +336,13 @@ function fridgeCard(ctx, W, H, r, photo) {
   footer(ctx, W, H, { ink: chalk, sub: '#b9d3c1' });
 }
 
-export async function renderCard(mode, result, photo, { story = false } = {}) {
+export async function renderCard(mode, result, photo, opts = {}) {
   await prepareCardAssets(mode);
-  const W = 1080, H = story ? 1920 : 1350;
+  const W = 1080, H = opts.story ? 1920 : 1350;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
-  ({ menu: menuCard, roast: roastCard, fridge: fridgeCard })[mode](ctx, W, H, result, photo);
+  ({ menu: menuCard, roast: roastCard, fridge: fridgeCard })[mode](ctx, W, H, result, photo, opts);
   return canvas;
 }
 

@@ -408,6 +408,28 @@ with sync_playwright() as p:
                 if story: check(f'card {tag}: no text below y={m["safe"]} (reply bar / link sticker zone)', m['below'] < 40 and m['bottom'] < m['safe'] - 112, str(m))
     ctx.close()
 
+    # ── 12. QW6: plate of the day + streak ──
+    ctx = browser.new_context(**PHONE, accept_downloads=True); ctx.add_init_script(FORCE_DEMO); derr, _ = instrument(ctx, 'daily')
+    ctx.add_init_script(SHARE_MOCK)
+    pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    line0 = pg.inner_text('#dailyLine')
+    check('home: "Plate of the day #N: theme" line, no streak yet', line0.startswith('🍽️ Plate of the day #') and ':' in line0 and 'streak' not in line0, line0)
+    pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(600)
+    check('first result starts a 1-day streak', '🔥 1-day streak' in pg.inner_text('#dailyLine'), pg.inner_text('#dailyLine'))
+    pg.click('#shareBtn'); pg.wait_for_function("() => window.__shares.length === 1")
+    n = pg.evaluate("(async () => (await import('/daily.js')).dayNumber())()")
+    check('caption carries "Snootfood #N 🔥1"', f'Snootfood #{n} 🔥1' in pg.evaluate('window.__shares[0].text'), pg.evaluate('window.__shares[0].text'))
+    # pretend the last two days were played → today is day 3 → milestone toast + stamp
+    pg.evaluate('''() => { const d = new Date(); d.setDate(d.getDate() - 1); const p = (n) => String(n).padStart(2, '0');
+        localStorage.setItem('snootfood.streak.v1', JSON.stringify({ last: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, count: 2, freezes: 1, freezeWeek: '' })); }''')
+    pg.reload(); pg.wait_for_load_state('networkidle')
+    pg.click('.modes [data-mode=roast]'); pg.click('[data-sample=beans]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(300)
+    check('day 3: milestone toast "3 days straight! Chef Gerardo is… mildly impressed."', '3 days straight! Chef Gerardo is… mildly impressed.' in pg.inner_text('#toast') and pg.is_visible('#toast') and pg.query_selector('#dailyLine .daily-streak.stamp'), pg.inner_text('#toast'))
+    pg.evaluate("window.scrollTo(0, 0)"); pg.click('#newBtn'); pg.wait_for_timeout(500)
+    check('home shows the 3-day streak', '🔥 3-day streak' in pg.inner_text('#dailyLine'), pg.inner_text('#dailyLine'))
+    pg.screenshot(path=str(SHOTS / 'qw6-daily-streak.png'))
+    errs += derr; ctx.close()
+
     check('no console errors / page errors', not errs, ' | '.join(errs)[:500])
     browser.close()
 

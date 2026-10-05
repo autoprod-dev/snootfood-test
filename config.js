@@ -33,4 +33,6 @@ export const APP = {
   realCallsPerDay: 3,
   // Ask "are you 18+?" once, before the first real AI call (Gemini is for adults only).
   ageGate: true,
+  // Day 1 of "Plate of the day" (local date). Plate #N counts up from here.
+  launchDate: '2026-10-05',
 };

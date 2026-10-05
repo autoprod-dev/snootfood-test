@@ -187,6 +187,30 @@ with sync_playwright() as p:
         out = (t / 'index.html').read_text()
     check('apply-config rewrites canonical + og:url + og:image for production', 'href="https://snootfood.example/"' in out and 'content="https://snootfood.example/og.png"' in out and url not in out)
 
+    # ── QW6: plate of the day + streak ──
+    d = pg.evaluate('''async () => { const m = await import('/daily.js'); localStorage.clear();
+        const at = (s) => new Date(s + 'T12:00:00');
+        const r = { themes: m.THEMES.length, uniq: new Set(m.THEMES).size, n1: m.dayNumber(at('2026-10-05')), n12: m.dayNumber(at('2026-10-16')), before: m.dayNumber(at('2026-09-01')),
+          theme: m.plateOfTheDay(at('2026-10-16')) === m.THEMES[12 % m.THEMES.length] };
+        const seq = {};
+        for (const day of ['2026-10-05', '2026-10-05', '2026-10-06', '2026-10-07']) seq[day + '#' + Object.keys(seq).length] = m.bumpStreak(at(day));
+        r.seq = Object.values(seq).map((x) => [x.count, x.bumped, x.milestone]);
+        r.skip1 = m.bumpStreak(at('2026-10-09'));          // missed the 8th: the week's freeze keeps it going
+        r.streakNow = m.getStreak(at('2026-10-09'));
+        r.skip2 = m.bumpStreak(at('2026-10-11'));          // missed the 10th too, same week, no freeze left → reset
+        r.newWeek = (m.bumpStreak(at('2026-10-12')), m.bumpStreak(at('2026-10-14')));   // new week (Mon 12th) refills the freeze
+        r.broken = m.getStreak(at('2026-10-20'));
+        r.shares = (m.markShared(), m.markShared());
+        localStorage.clear(); return r; }''')
+    check('THEMES: 30+ unique plate-of-the-day themes', d['themes'] >= 30 and d['uniq'] == d['themes'], str(d['themes']))
+    check('dayNumber counts from launch (day 1 = launch, never below 1)', d['n1'] == 1 and d['n12'] == 12 and d['before'] == 1 and d['theme'], str([d['n1'], d['n12'], d['before']]))
+    check('streak: once per day, +1 on consecutive days, milestone at 3', d['seq'] == [[1, True, False], [1, False, False], [2, True, False], [3, True, True]], str(d['seq']))
+    check('streak: one missed day uses the weekly freeze', d['skip1']['count'] == 4 and d['skip1']['usedFreeze'] and d['streakNow'] == 4, str(d['skip1']))
+    check('streak: second miss in the same week resets to 1', d['skip2']['count'] == 1 and not d['skip2']['usedFreeze'], str(d['skip2']))
+    check('streak: new week refills the freeze', d['newWeek']['usedFreeze'] and d['newWeek']['count'] == 3, str(d['newWeek']))
+    check('streak: long gap reads as 0; shares counted', d['broken'] == 0 and d['shares'] == 2)
+    check('service worker caches daily.js', "'daily.js'" in (ROOT / 'sw.js').read_text())
+
     check('no page errors', not errs, ' | '.join(errs))
     browser.close()
 

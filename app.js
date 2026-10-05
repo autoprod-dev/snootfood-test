@@ -3,6 +3,7 @@ import { analyseImage, demoResult, SAMPLES } from './demo.js';
 import { PROVIDERS, RELAY_MODEL, analyse, AIError } from './ai.js';
 import { renderCard, canvasToBlob, prepareCardAssets } from './card.js';
 import { decodeImage, resizeTo, toJpeg, photoCheck, FRIDGE_EDGE, FRIDGE_QUALITY } from './image.js';
+import { daily, bumpStreak, markShared } from './daily.js';
 import { budget, spend, kitchenClosed, closeKitchen, nextResetLocal, ageOk, setAge } from './budget.js';
 
 const $ = (s) => document.querySelector(s);
@@ -385,6 +386,9 @@ function showChecklist() {
 // ───────── Results ─────────
 function showResult() {
   const r = state.result, p = $('#panel');
+  const st = bumpStreak();
+  refreshDaily(st.milestone);
+  if (st.milestone) toast(`${st.count} days straight! ${APP.chef} is… mildly impressed.`);
   p.className = 'panel ' + state.mode;
   p.replaceChildren();
   if (state.source === 'demo') {
@@ -430,7 +434,8 @@ function showResult() {
 // ───────── Share card ─────────
 const cardSize = () => document.querySelector('input[name=cardSize]:checked').value;
 async function prerenderCard() {
-  const opts = { story: cardSize() === 'story', challenge: challengeVs(), demo: state.source === 'demo' && !state.sampleId };
+  const d = daily();
+  const opts = { story: cardSize() === 'story', challenge: challengeVs(), demo: state.source === 'demo' && !state.sampleId, daily: { n: d.n, theme: d.theme, streak: d.streak } };
   const key = JSON.stringify([state.mode, state.result, opts]);
   if (state.cardKey === key && state.card) return state.card;
   state.cardKey = key; state.card = null;
@@ -499,7 +504,7 @@ function challengeShare() {
   if (navigator.share) navigator.share({ text: line, url }).then(() => { note.textContent = 'Challenge sent. May the best plate win.'; }).catch((e) => { if (e?.name !== 'AbortError' && e?.name !== 'InvalidStateError') fallback(); });
   else fallback();
 }
-const dailyTag = () => '';            // QW6 adds "Snootfood #12 🔥3"
+const dailyTag = () => { const d = daily(); return `${APP.name} #${d.n}${d.streak ? ' 🔥' + d.streak : ''}`; };
 
 function caption() {
   const r = state.result;
@@ -516,7 +521,7 @@ const canShareFile = (file) => { try { return !!(navigator.share && navigator.ca
 function copyCaption(text) {   // resolves true/false; never throws
   try { return navigator.clipboard ? navigator.clipboard.writeText(text).then(() => true, () => false) : Promise.resolve(false); } catch { return Promise.resolve(false); }
 }
-function afterShare() { /* QW6 markShared(), QW8 maybeNudgeInstall('share') */ }
+function afterShare() { markShared(); /* QW8 maybeNudgeInstall('share') */ }
 
 function share() {
   const file = state.card;
@@ -586,6 +591,13 @@ let toastTimer;
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 3200);
+}
+
+// ───────── Plate of the day + streak (QW6) ─────────
+function refreshDaily(stamp = false) {
+  const d = daily(), line = $('#dailyLine');
+  line.replaceChildren(el('span', 'daily-plate', `🍽️ Plate of the day #${d.n}: ${d.theme}`));
+  if (d.streak) line.append(' · ', el('span', 'daily-streak' + (stamp ? ' stamp' : ''), `🔥 ${d.streak}-day streak`));
 }
 
 // ───────── First-load teaser (no network) ─────────
@@ -675,6 +687,7 @@ function init() {
   const initial = state.challenge?.mode || location.hash.slice(1);
   setMode(COPY[initial] ? initial : 'menu');   // also replaces the URL with #mode, so a reload doesn't repeat the challenge
   refreshDemoPill();
+  refreshDaily();
   if (state.challenge) { showChallengeBanner(state.challenge); try { localStorage.setItem(SEEN, '1'); } catch { /* fine */ } }
   else showTeaser();
   prepareCardAssets();

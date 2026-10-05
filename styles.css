@@ -264,3 +264,9 @@ details .field, details .check { margin-top: 10px; }
 .challenge-line.won { background: #ffcf5a; color: #2a1f1a; }
 .challenge-line.lost, .challenge-line.tie { background: #2c2220; color: #f3e9dc; border: 1px solid #ff5a3c; }
 .challenge-btn { width: 100%; }
+
+/* QW6: plate of the day + streak */
+.daily-line { margin: -4px 0 14px; text-align: center; font: 600 .9rem/1.4 var(--sans); color: var(--ink-2); }
+.daily-plate { font-style: italic; }
+.daily-streak { display: inline-block; font-weight: 800; color: #c8102e; }
+.daily-streak.stamp { animation: stamp .6s cubic-bezier(.2,.9,.3,1.4) both; }

@@ -135,6 +135,16 @@ function footer(ctx, W, H, { ink, sub, accent }, opts = {}) {
   ctx.fillStyle = accent || ink; ctx.font = `700 24px ${SERIF}`; ctx.fillText(tag, x + 84, y + 82);
 }
 
+// "Plate of the day #12 · 🔥3" under the eyebrow (QW6). Returns the extra height used.
+function dailyLine(ctx, W, y, colour, opts) {
+  const d = opts.daily;
+  if (!d) return 0;
+  ctx.save(); ctx.fillStyle = colour; ctx.font = `600 23px ${SERIF}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(`Plate of the day #${d.n}${d.streak ? '  ·  🔥' + d.streak : ''}`, W / 2, y);
+  ctx.restore();
+  return 30;
+}
+
 // Honest label when the card is a demo take of the user's own photo (not a real read).
 function demoTag(ctx, W, colour, bg) {
   ctx.save(); ctx.font = `800 20px ${SERIF}`;
@@ -174,6 +184,7 @@ function menuCard(ctx, W, H, r, photo, opts = {}) {
   ornament(ctx, W / 2, 146, 300, '#b8913a');
   ctx.font = `italic 500 28px ${SERIF}`; ctx.fillStyle = '#6b5446'; ctx.textAlign = 'center';
   ctx.fillText('On the menu tonight', W / 2, 162);
+  const extra = dailyLine(ctx, W, 200, '#8a6d3b', opts);
 
   const tw = W - 200;
   const name = fit(ctx, r.dishName, (s) => `italic 500 ${s}px ${SERIF}`, tw, 3, 74, 44);
@@ -181,7 +192,7 @@ function menuCard(ctx, W, H, r, photo, opts = {}) {
   const notes = fit(ctx, '“' + r.chefNotes + '”', (s) => `italic 500 ${s}px ${SERIF}`, tw - 40, 3, 28, 22);
   const pair = fit(ctx, 'Pair it with: ' + r.pairing, (s) => `600 ${s}px ${SERIF}`, tw, 2, 24, 20);
   const textH = name.lines.length * name.lh + 22 + desc.lines.length * desc.lh + 30 + 76 + 26 + 34 + notes.lines.length * notes.lh + 18 + pair.lines.length * pair.lh;
-  const top = 222, bottom = contentBottom(H, opts.story);
+  const top = 222 + extra, bottom = contentBottom(H, opts.story);
   const photoH = Math.max(280, Math.min(H > 1500 ? 900 : 560, bottom - top - textH - 60));
   const photoW = Math.min(W - 240, photoH * 1.05);
   const px = (W - photoW) / 2, py = top;
@@ -228,6 +239,7 @@ function roastCard(ctx, W, H, r, photo, opts = {}) {
   spaced(ctx, 'CHEF ROAST', W / 2, 70, 12);
   ctx.fillStyle = '#f3e9dc'; ctx.font = `600 40px ${HAND}`; ctx.textAlign = 'center';
   ctx.fillText('judged by ' + APP.chef, W / 2, 114);
+  const extra = dailyLine(ctx, W, 166, '#b9a99a', opts);
 
   const tw = W - 180;
   const head = fit(ctx, r.headline, (s) => `800 ${s}px ${SERIF}`, tw, 2, 66, 42);
@@ -235,7 +247,7 @@ function roastCard(ctx, W, H, r, photo, opts = {}) {
   const comp = fit(ctx, '✓ ' + r.compliment, (s) => `600 ${s}px ${SERIF}`, tw, 2, 26, 20);
   const fix = fit(ctx, 'Pro tip: ' + r.fix, (s) => `600 ${s}px ${SERIF}`, tw, 2, 26, 20);
   const textH = head.lines.length * head.lh + 26 + roast.lines.length * roast.lh + 26 + (comp.lines.length * comp.lh) + 10 + fix.lines.length * fix.lh;
-  const top = 190, bottom = contentBottom(H, opts.story);
+  const top = 190 + extra, bottom = contentBottom(H, opts.story);
   const photoH = Math.max(300, Math.min(H > 1500 ? 860 : 500, bottom - top - textH - 110));
   const photoW = Math.min(W - 260, photoH * 1.2);
 
@@ -309,6 +321,7 @@ function fridgeCard(ctx, W, H, r, photo, opts = {}) {
   ctx.font = `600 76px ${HAND}`; ctx.fillText('Tonight’s Special', W / 2, 62);
   ctx.font = `italic 500 26px ${SERIF}`; ctx.fillStyle = '#cfe3d4';
   ctx.fillText(`${APP.restaurant} · straight from your fridge`, W / 2, 146);
+  const extra = dailyLine(ctx, W, 186, '#b9d3c1', opts);
 
   const tw = W - 180;
   const name = fit(ctx, r.specialName, (s) => `italic 500 ${s}px ${SERIF}`, tw, 2, 64, 40);
@@ -318,7 +331,7 @@ function fridgeCard(ctx, W, H, r, photo, opts = {}) {
   const note = fit(ctx, '“' + r.note + '”', (s) => `italic 500 ${s}px ${SERIF}`, tw, 2, 26, 20);
   const stepsH = steps.reduce((s, b) => s + b.lines.length * b.lh + 4, 0);
   const textH = name.lines.length * name.lh + 18 + desc.lines.length * desc.lh + 20 + ingr.lines.length * ingr.lh + 18 + stepsH + 18 + note.lines.length * note.lh;
-  const top = 222, bottom = contentBottom(H, opts.story);
+  const top = 222 + extra, bottom = contentBottom(H, opts.story);
   const photoH = Math.max(280, Math.min(H > 1500 ? 820 : 450, bottom - top - textH - 50));
   const photoW = Math.min(W - 300, photoH * 1.25);
   const px = (W - photoW) / 2, py = top;

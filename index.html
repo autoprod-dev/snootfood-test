@@ -5,24 +5,24 @@
 <title>Snootfood (TEST) · Every meal deserves a menu.</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow, noarchive">
-<meta name="description" content="Snap any meal and get a fancy menu card, a cheeky roast from a grumpy chef, or tonight’s special straight from your fridge.">
+<meta name="description" content="Snap your food. Chef Gerardo judges it. A score, a fake price, or tonight’s special from your fridge.">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://*.workers.dev https://generativelanguage.googleapis.com https://openrouter.ai https://api.anthropic.com https://api.openai.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <meta name="referrer" content="no-referrer">
 <link rel="canonical" href="https://autoprod-dev.github.io/snootfood-test/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Snootfood">
-<meta property="og:title" content="Snootfood · Chef Gerardo will roast your dinner">
-<meta property="og:description" content="Snap any meal: get a fancy menu card, a sassy chef roast, or tonight’s special from your fridge. Free, no sign-up. 18+.">
+<meta property="og:title" content="Snootfood · Show Chef Gerardo what you’re eating">
+<meta property="og:description" content="Snap your food. Get a score, a fake price, or tonight’s special from your fridge. Free, no sign-up. 18+ for real reads.">
 <meta property="og:url" content="https://autoprod-dev.github.io/snootfood-test/">
 <meta property="og:image" content="https://autoprod-dev.github.io/snootfood-test/og.png">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Chef Gerardo, arms crossed, next to a plate of instant noodles stamped 4/10, with the line ‘Chef Gerardo will roast your dinner.’">
+<meta property="og:image:alt" content="A full-bleed photo of beans on toast stamped 4/10 in a yellow circle, the verdict ‘The beans won.’ and a disgusted Chef Gerardo in the corner.">
 <meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#1b1411">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="light dark">
 <meta name="application-name" content="Snootfood">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -31,116 +31,113 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="preload" href="fonts/playfair.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/intertight.woff2" as="font" type="font/woff2" crossorigin>
+<script src="theme.js"></script>
 <link rel="stylesheet" href="styles.css">
 <script type="module" src="app.js"></script>
 </head>
-<body data-mode="menu">
+<body data-mode="roast">
 <a class="skip" href="#main">Skip to content</a>
-<header class="top">
-  <div class="brand">
-    <img src="chef.svg" alt="" width="40" height="48" class="brand-chef">
-    <div>
-      <h1 class="brand-name"><span data-app-name>Snootfood</span> <span class="test-badge" data-test-badge>TEST</span></h1>
-      <p class="brand-tag" data-app-tagline>Every meal deserves a menu.</p>
-    </div>
-  </div>
-  <button class="icon-btn" id="settingsBtn" type="button" aria-haspopup="dialog" aria-label="Settings and AI key">
-    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.3 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.3-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
-  </button>
+<header class="float" id="top">
+  <h1 class="pill logo"><span data-app-name>Snootfood</span><span class="test-badge" data-test-badge>TEST</span></h1>
+  <button type="button" class="pill y demo-pill" id="demoPill" data-open-settings aria-label="Demo mode: sample verdicts. Open settings to add a key.">DEMO</button>
+  <span class="float-gap"></span>
+  <button type="button" class="pill icon" id="soundBtn" aria-pressed="false" aria-label="Sound off. Turn sound on"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9z"/><path class="snd-on" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/><path class="snd-off" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="m16 9 5 6m0-6-5 6"/></svg></button>
+  <button type="button" class="pill icon" id="themeBtn" aria-label="Switch theme"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path fill="currentColor" d="M12 3.5a8.5 8.5 0 0 1 0 17z"/></svg></button>
+  <button type="button" class="pill icon" id="settingsBtn" aria-haspopup="dialog" aria-label="Settings and AI key"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.3 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.3-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7z"/></svg></button>
 </header>
 
-<nav class="modes" role="tablist" aria-label="Choose a mode">
-  <button role="tab" id="tab-menu" aria-controls="main" aria-selected="true" data-mode="menu"><span aria-hidden="true">🍽️</span> Fancy Menu</button>
-  <button role="tab" id="tab-roast" aria-controls="main" aria-selected="false" data-mode="roast" tabindex="-1"><span aria-hidden="true">🔥</span> Chef Roast</button>
-  <button role="tab" id="tab-fridge" aria-controls="main" aria-selected="false" data-mode="fridge" tabindex="-1"><span aria-hidden="true">🧊</span> Fridge Chef</button>
-</nav>
-
 <main id="main" tabindex="-1">
-  <div class="demo-pill" id="demoPill" role="status">
-    <strong>DEMO MODE</strong> · sample results, not a read of your photo. <button type="button" class="link" data-open-settings>Add a free key</button> to get the real thing.
-  </div>
-  <div class="inapp-hint" id="inAppHint" role="note" hidden><p>For sharing and the home-screen app, open this page in your browser: tap <strong>⋯</strong>, then “Open in browser.”</p><button type="button" class="btn btn-small btn-ghost" aria-label="Dismiss">OK</button></div>
-  <div class="kitchen-banner" id="kitchenBanner" role="status" hidden></div>
-
   <section class="intro" id="intro">
-    <div class="challenge-banner" id="challengeBanner" role="note" hidden></div>
-    <div class="speech">
-      <picture class="intro-chef">
-        <source id="introChefSrc" type="image/webp" srcset="img/chef-gerardo-fancy-menu.webp">
-        <img id="introChef" src="img/chef-gerardo-fancy-menu.png" alt="Chef Gerardo, looking snooty" width="588" height="512" decoding="async">
-      </picture>
-      <p id="introLine" aria-live="polite"></p>
+    <div class="cam" id="cam">
+      <img class="cam-img" id="camImg" src="samples/noodles.jpg" alt="" width="900" height="900" fetchpriority="high">
+      <div class="brackets" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="cam-chips"><span class="pill small age-hint" id="ageHint">18+ for real reads</span><p class="pill small daily-line" id="dailyLine"></p></div>
+      <div class="cam-top">
+        <div class="challenge-banner card" id="challengeBanner" role="note" hidden></div>
+        <div class="kitchen-banner card" id="kitchenBanner" role="status" hidden></div>
+        <div class="inapp-hint card" id="inAppHint" role="note" hidden><p>Sharing works better in your browser: tap <strong>⋯</strong>, then “Open in browser.”</p><button type="button" class="btn btn-small" aria-label="Dismiss">OK</button></div>
+        <div class="teaser card" id="teaser" hidden></div>
+      </div>
+      <p class="say" id="introLine" aria-live="polite"></p>
+      <div class="home-chef" id="homeChefSlot"></div>
     </div>
-    <p class="daily-line" id="dailyLine"></p>
-
-    <div class="teaser" id="teaser" hidden></div>
-
-    <div class="capture" id="capture">
-      <label class="btn btn-primary btn-xl" for="cameraInput">
-        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M9 3 7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
-        <span id="snapLabel">Snap your meal</span>
-      </label>
-      <input type="file" id="cameraInput" accept="image/*" capture="environment" class="visually-hidden">
-      <label class="btn btn-ghost" for="uploadInput">Upload a photo</label>
-      <input type="file" id="uploadInput" accept="image/*" class="visually-hidden">
-    </div>
-
-    <div class="samples">
-      <h2 class="samples-title">Nothing to snap? Try one of ours</h2>
-      <ul class="sample-list" id="sampleList"></ul>
+    <div class="sheet home-sheet">
+      <nav class="modes" role="tablist" aria-label="Choose a mode">
+        <button role="tab" id="tab-roast" aria-controls="main" aria-selected="true" data-mode="roast">Roast</button>
+        <button role="tab" id="tab-menu" aria-controls="main" aria-selected="false" data-mode="menu" tabindex="-1">Menu</button>
+        <button role="tab" id="tab-fridge" aria-controls="main" aria-selected="false" data-mode="fridge" tabindex="-1">Fridge</button>
+      </nav>
+      <div class="capture" id="capture">
+        <span class="cap-side"></span>
+        <label class="shutter" for="cameraInput"><span class="visually-hidden" id="snapLabel">Snap it</span></label>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" class="visually-hidden">
+        <label class="gallery" for="uploadInput"><img src="samples/beans.jpg" alt="" width="54" height="54"><span class="visually-hidden">Pick a photo</span></label>
+        <input type="file" id="uploadInput" accept="image/*" class="visually-hidden">
+      </div>
+      <p class="shutter-label" aria-hidden="true">Snap it</p>
+      <div class="samples">
+        <h2 class="samples-title">No food? Use ours.</h2>
+        <ul class="sample-list" id="sampleList"></ul>
+      </div>
     </div>
   </section>
 
-  <section class="result" id="result" hidden aria-live="polite" aria-busy="false">
+  <section class="result" id="result" hidden aria-busy="false">
     <div class="photo-wrap" id="photoWrap">
       <img id="photo" alt="Your photo">
-      <div class="cloche" id="cloche" aria-hidden="true"></div>
+      <div class="scan" aria-hidden="true"></div>
+      <div class="wait-chef" id="waitChefSlot"></div>
     </div>
-    <p class="loading" id="loading" hidden></p>
-    <p class="error" id="error" role="alert" hidden></p>
+    <div class="wait sheet-card" id="loading" hidden>
+      <p class="wait-title" id="waitTitle"></p>
+      <p class="wait-line" id="waitLine" aria-live="polite"></p>
+      <div class="gag" aria-hidden="true"><div class="gag-bar"><i id="waitBar"></i></div><span class="gag-label" id="waitLabel"></span></div>
+    </div>
+    <p class="error sheet-card" id="error" role="alert" hidden></p>
     <article class="panel" id="panel" hidden></article>
-    <p class="run-note" id="runNote" role="status" hidden></p>
-    <div class="actions" id="actions" hidden>
-      <button class="btn btn-primary btn-xl share-btn" id="shareBtn" type="button">
-        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M18 16a3 3 0 0 0-2.4 1.2l-6.7-3.4a3 3 0 0 0 0-1.6l6.7-3.4A3 3 0 1 0 15 7l-6.7 3.4a3 3 0 1 0 0 3.2L15 17a3 3 0 1 0 3-1z"/></svg>
-        <span>Share</span>
-      </button>
-      <button class="btn btn-ghost challenge-btn" id="challengeBtn" type="button">🔥 Roast a friend’s plate</button>
-      <div class="actions-row">
-        <button class="btn btn-ghost" id="againBtn" type="button">Another one!</button>
-        <button class="btn btn-ghost" id="editBtn" type="button" hidden>Edit ingredients</button>
-        <button class="btn btn-ghost" id="newBtn" type="button">New photo</button>
+    <p class="visually-hidden" id="revealLive" aria-live="assertive"></p>
+    <div class="after">
+      <p class="run-note" id="runNote" role="status" hidden></p>
+      <div class="actions" id="actions" hidden>
+        <button class="btn btn-primary btn-xl share-btn" id="shareBtn" type="button"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 2 7 7h3.5v7h3V7H17zM5 12v8h14v-8h-2v6H7v-6z"/></svg><span>Share the verdict</span></button>
+        <div class="size-toggle" role="radiogroup" aria-label="Share card size">
+          <label><input type="radio" name="cardSize" value="post" checked> Post 4:5</label>
+          <label><input type="radio" name="cardSize" value="story"> Story 9:16</label>
+        </div>
+        <p class="share-note" id="shareNote" aria-live="polite"></p>
+        <div class="actions-row">
+          <button class="btn" id="againBtn" type="button">Judge it again</button>
+          <button class="btn" id="newBtn" type="button">Next plate</button>
+        </div>
+        <button class="btn" id="editBtn" type="button" hidden>Edit ingredients</button>
+        <div class="swap" id="swapModes"><span>Same photo as</span><button type="button" class="pill" data-swap="roast">Roast</button><button type="button" class="pill" data-swap="menu">Menu</button><button type="button" class="pill" data-swap="fridge">Fridge</button></div>
+        <button class="btn btn-ghost challenge-btn" id="challengeBtn" type="button">Make a friend suffer</button>
       </div>
-      <div class="size-toggle" role="radiogroup" aria-label="Share card size">
-        <label><input type="radio" name="cardSize" value="post" checked> Post 4:5</label>
-        <label><input type="radio" name="cardSize" value="story"> Story 9:16</label>
-      </div>
-      <p class="share-note" id="shareNote" aria-live="polite"></p>
     </div>
   </section>
 </main>
 
 <footer class="foot">
-  <p>A just-for-fun <span data-brand>Autoprod</span> experiment. Prices are totally made up, and nothing here is cooking, nutrition or food-safety advice.</p>
-  <p class="foot-small">In demo mode, your photo never leaves your device. With real AI on, it goes only to the AI provider doing the reading. <span data-test-note>This is a TEST build.</span></p>
+  <p>A just-for-fun <span data-brand>Autoprod</span> experiment. Prices are fake. Nothing here is cooking, nutrition or food-safety advice.</p>
+  <p>Demo mode: your photo stays on your device. Real reads: it goes only to the AI provider. <span data-test-note>TEST build.</span></p>
 </footer>
 
 <dialog id="settings" aria-labelledby="settingsTitle">
   <form method="dialog" class="settings-form" id="settingsForm">
     <h2 id="settingsTitle">Settings</h2>
-    <p class="muted">The app works right away in <strong>demo mode</strong> with sample results. Want it to actually read your photos? Paste your own AI key. Google Gemini’s is free.</p>
+    <p>It works now in <strong>demo mode</strong>. For real reads, paste your own AI key. Gemini’s is free.</p>
     <label class="field">Provider
       <select id="provider"></select>
     </label>
     <label class="field">Your API key
       <span class="key-row">
-        <input type="password" id="apiKey" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="Paste your key here">
+        <input type="password" id="apiKey" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="Paste your key">
         <button type="button" class="btn btn-small" id="toggleKey" aria-pressed="false">Show</button>
       </span>
       <span class="hint" id="keyHint"></span>
     </label>
-    <p class="get-key"><a id="keyLink" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Get a free key</a> <span class="muted">(opens the provider’s website)</span></p>
+    <p class="get-key"><a id="keyLink" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Get a free key</a> (opens the provider’s site)</p>
     <details>
       <summary>Advanced</summary>
       <label class="field">Model
@@ -151,13 +148,13 @@
     <div class="privacy">
       <h3>Privacy</h3>
       <ul>
-        <li>Your key is saved only in this browser (localStorage) on this device. It never gets sent to us, and no server of ours is involved.</li>
-        <li>With a key set, each photo is resized on your device and sent straight to the provider you picked, under their terms. Free tiers (like Gemini’s) may use your inputs to improve their products, so don’t snap anything private.</li>
-        <li>Use a key you can cancel anytime, and remove it below if you’re on a shared device.</li>
+        <li>Your key stays in this browser. We never see it.</li>
+        <li>With a key, photos are resized here and sent straight to that provider, under their terms. Free tiers may train on them. Don’t snap anything private.</li>
+        <li>Use a key you can cancel. Remove it on shared devices.</li>
       </ul>
     </div>
     <div class="settings-actions">
-      <button type="button" class="btn btn-ghost" id="forgetKey">Remove key</button>
+      <button type="button" class="btn" id="forgetKey">Remove key</button>
       <button type="submit" class="btn btn-primary" id="saveSettings" value="save">Save</button>
     </div>
   </form>
@@ -165,20 +162,20 @@
 
 <dialog id="ageGate" aria-labelledby="ageTitle">
   <form method="dialog" class="age-form">
-    <img src="img/chef-gerardo-chef-roast.png" alt="" width="323" height="512" class="age-chef">
-    <h2 id="ageTitle">Quick check before Chef takes a look</h2>
-    <p>Real photo reading uses <span id="ageProvider">Google Gemini</span>, which is for adults (18+) only. Are you 18 or over?</p>
+    <div class="age-chef" id="ageChefSlot"></div>
+    <h2 id="ageTitle">Real reads are 18+.</h2>
+    <p>Photos go to <span id="ageProvider">Google Gemini</span>. Adults only.</p>
     <div class="age-actions">
-      <button class="btn btn-primary" value="yes" id="ageYes">Yes, I’m 18+</button>
-      <button class="btn btn-ghost" value="no" id="ageNo">No, keep it demo</button>
+      <button class="btn btn-primary" value="yes" id="ageYes">I’m 18+</button>
+      <button class="btn" value="no" id="ageNo">Keep it demo</button>
     </div>
   </form>
 </dialog>
 
 <div class="install-bar" id="installBar" role="dialog" aria-label="Add Snootfood to your home screen" hidden>
-  <img src="img/chef-gerardo-fancy-menu.png" alt="" width="58" height="50">
+  <img src="img/chef-judging.webp" alt="" width="40" height="59">
   <p id="installMsg"></p>
-  <div class="install-actions"><button class="btn btn-small btn-primary" id="installAdd" type="button">Add</button><button class="btn btn-small btn-ghost" id="installLater" type="button">Not now</button></div>
+  <div class="install-actions"><button class="btn btn-small btn-primary" id="installAdd" type="button">Add</button><button class="btn btn-small" id="installLater" type="button">Not now</button></div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 </body>

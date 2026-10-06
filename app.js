@@ -6,58 +6,36 @@ import { decodeImage, resizeTo, toJpeg, photoCheck, FRIDGE_EDGE, FRIDGE_QUALITY 
 import { daily, bumpStreak, markShared } from './daily.js';
 import { maybeNudgeInstall, inAppHint } from './install.js';
 import { budget, spend, kitchenClosed, closeKitchen, nextResetLocal, ageOk, setAge } from './budget.js';
+import { chefSlot, setExpr, play, react, bandFor, stampLine, reducedMotion, preloadExpressions } from './chef.js';
+import { sfx, confetti, soundOn, setSound } from './fx.js';
 
 const $ = (s) => document.querySelector(s);
-const chefAlt = (mode) => `${APP.chef}, looking ${APP.chefArt[mode].mood}`;
-function chefPicture(mode, cls) {
-  const a = APP.chefArt[mode];
-  const pic = document.createElement('picture'); pic.className = cls;
-  const src = document.createElement('source'); src.type = 'image/webp'; src.srcset = a.file + '.webp';
-  const img = document.createElement('img'); img.src = a.file + '.png'; img.alt = chefAlt(mode); img.width = a.w; img.height = a.h; img.decoding = 'async';
-  pic.append(src, img);
-  return pic;
-}
-function chefSign(mode) {
-  const s = el('div', 'chef-sign'); s.append(el('p', 'byline', '— ' + APP.chef), chefPicture(mode, 'sign-chef'));
-  return s;
-}
 const STORE = 'snootfood.settings.v1';
 
 const COPY = {
-  menu: {
-    intro: 'Hey there! Show me your dinner, even if it’s instant noodles. <em>Especially</em> if it’s instant noodles. I’ll make it sound like it costs a fortune.',
-    snap: 'Snap your meal', eyebrow: 'On the menu tonight',
-    loading: ['Warming up the plates…', 'Ironing the tablecloth…', 'Asking the drinks guy (he only does soda)…', 'Making the name sound way fancier…', 'Calculating a totally unreasonable price…'],
-  },
-  roast: {
-    intro: `I’m ${APP.chef}. I’ve judged ten thousand plates and loved maybe four. Show me yours. I’ll be honest. Like, <em>really</em> honest.`,
-    snap: 'Snap your plating', eyebrow: 'Chef Roast',
-    loading: ['Chef is squinting…', 'Chef just put on his reading glasses…', 'The mustache is twitching…', 'Sharpening the scorecard…', 'Sighing very dramatically…'],
-  },
-  fridge: {
-    intro: 'Open the fridge, snap what’s inside, and I’ll whip up tonight’s special. Nobody needs to know about that jar in the back.',
-    snap: 'Snap your fridge', eyebrow: 'Tonight’s Special',
-    loading: ['Digging through the crisper…', 'Sniffing the milk, bravely…', 'Writing on the chalkboard…', 'Ignoring the mystery container…', 'Coming up with a catchy name…'],
-    scanLoading: ['Scanning every shelf…', 'Squinting at the back row…', 'Counting the eggs…', 'Checking out the door shelves…', 'Making a list, checking it twice…'],
-    recipeLoading: ['Cooking up ideas…', 'Sticking to your list, promise…', 'Writing on the chalkboard…', 'Coming up with a catchy name…'],
-  },
+  roast: { intro: 'Show me what you’re eating.', eyebrow: 'Chef Roast' },
+  menu: { intro: 'Show me dinner. I’ll price it.', eyebrow: 'On the menu tonight' },
+  fridge: { intro: 'Open the fridge. Let’s see.', eyebrow: 'Tonight’s special' },
 };
 
-const DEMO_BANNER = {
-  fridge: 'These are sample ingredients, not what’s in your fridge.',
-  other: 'This is a sample take, not a read of your photo.',
-  live: ' Snap your own photo and tap “Get Chef’s real take” for the real thing.',
-  off: ' Real photo reading kicks in once the AI key is hooked up.',
+// The wait: a title, short lines that rotate every ~2.5 s (no repeats until all are used), and a gag progress bar.
+const WAIT = {
+  roast: { title: 'Chef is judging your plate.', lines: ['Looking. Judging. Mostly judging.', 'Zooming in. Regretting it.', 'Counting the beans.', 'Checking for vegetables.', 'Hmm.', 'Still looking. Still judging.', 'Almost done. Unfortunately.'], gag: ['Zooming in', 'Counting things', 'Checking for vegetables', 'Forming an opinion', 'Regretting this'] },
+  menu: { title: 'Chef is pricing your dinner.', lines: ['Making it sound expensive.', 'Inventing a price.', 'Finding a fancier word.', 'Adding a tiny garnish.', 'Ironing the napkin.', 'Raising the price. Again.'], gag: ['Reading the plate', 'Finding fancier words', 'Inventing a price', 'Adding a zero', 'Adding another zero'] },
+  scan: { title: 'Chef is judging your fridge.', lines: ['Opening the door.', 'Reading every label.', 'Ignoring the back jar.', 'Smelling the milk. Bravely.', 'Counting the eggs.', 'Checking the door shelf.'], gag: ['Opening the door', 'Reading labels', 'Smelling the milk', 'Counting eggs', 'Ignoring the back jar'] },
+  fridge: { title: 'Chef is planning dinner.', lines: ['Sticking to your list.', 'Picking a pan.', 'Naming it something nice.', 'Counting the eggs.', 'Ignoring the back jar.'], gag: ['Reading your list', 'Picking a pan', 'Doing the math', 'Writing it down', 'Regretting this'] },
 };
+
+const DEMO_BANNER = { fridge: 'Not your fridge.', other: 'Not a read of your photo.', live: ' Snap your own for a real one.' };
 
 const QUALITY_WARNING = {
-  blurry: 'This one’s a little blurry, so I might have missed stuff. Retake it, or fix the list below.',
-  dark: 'It’s pretty dark in there! Double-check the list, or retake it with the light on.',
-  too_far: 'That’s a bit far away. Get closer for a better read, or fix the list below.',
-  no_food: 'I couldn’t spot any food in this one. Try a closer, brighter shot, or type what you’ve got below.',
+  blurry: 'Blurry. I might have missed stuff.',
+  dark: 'Too dark in there. Check the list.',
+  too_far: 'Too far away. Check the list.',
+  no_food: 'No food spotted. Type what you’ve got.',
 };
 
-const state = { mode: 'menu', photo: null, apiDataUrl: null, fridgeDataUrl: null, features: null, sampleId: null, result: null, roll: 0, ctrl: null, card: null, cardKey: '', source: 'demo', fridge: null };
+const state = { mode: 'roast', photo: null, apiDataUrl: null, fridgeDataUrl: null, features: null, sampleId: null, result: null, roll: 0, ctrl: null, card: null, cardKey: '', source: 'demo', fridge: null };
 
 // ───────── Settings ─────────
 function loadSettings() {
@@ -94,7 +72,8 @@ function refreshKitchen() {
   const closed = budgeted() && kitchenClosed();
   const b = $('#kitchenBanner');
   b.hidden = !closed;
-  if (closed) b.textContent = `Chef’s off duty till ${nextResetLocal()}. Everything’s a demo take until then.`;
+  if (closed) b.textContent = `Chef’s off till ${nextResetLocal()}. Demo takes till then.`;
+  if (homeChef) setExpr(homeChef, closed ? 'shocked' : 'judging');
 }
 
 // 18+ check, once, right before the first real AI call. "No" switches this device to demo mode.
@@ -107,7 +86,7 @@ function confirmAge() {
     d.addEventListener('close', () => {
       const yes = d.returnValue === 'yes';
       if (yes) setAge(true);
-      else if (d.returnValue === 'no') { setAge(false); settings.forceDemo = true; saveSettings(); refreshDemoPill(); toast('No problem! Demo mode is on. You can change it in Settings.'); }
+      else if (d.returnValue === 'no') { setAge(false); settings.forceDemo = true; saveSettings(); refreshDemoPill(); toast('Demo it is. Change it in Settings.'); }
       resolve(yes);
     }, { once: true });
     d.returnValue = '';
@@ -146,7 +125,7 @@ function openSettings() { fillSettingsForm(); $('#settings').showModal(); }
 async function usePhoto(fileOrUrl, sampleId = null) {
   let img;
   try { img = await decodeImage(fileOrUrl); }
-  catch { toast('Hmm, that image won’t open. Try a JPEG or PNG (or just screenshot it).'); return; }
+  catch { toast('That image won’t open. Try a JPEG or a screenshot.'); return; }
   state.photo = resizeTo(img, FRIDGE_EDGE);     // upright, long edge ≤1600 px: preview, share card, Fridge Chef AI copy
   state.apiDataUrl = resizeTo(state.photo, 1024).toDataURL('image/jpeg', 0.8);   // Fancy Menu / Chef Roast AI copy
   state.fridgeDataUrl = null;                   // made on demand (1600 px, JPEG 0.85, ≤2 MB)
@@ -160,25 +139,52 @@ async function usePhoto(fileOrUrl, sampleId = null) {
   $('#intro').hidden = true;
   $('#teaser').hidden = true;
   $('#result').hidden = false;
+  window.scrollTo(0, 0);
   run();
 }
 const fridgeDataUrl = () => (state.fridgeDataUrl ||= toJpeg(state.photo, FRIDGE_QUALITY).dataUrl);
 
 // ───────── Run a mode ─────────
-let loadingTimer;
-function setBusy(on, lines = COPY[state.mode].loading) {
+let lineTimer, gagTimer;
+const waitChef = () => $('#waitChefSlot .chef-slot');
+// Shuffled bag: every item once before any repeats, and never the same one twice in a row.
+function bag(items) {
+  let left = [], last = null;
+  return () => {
+    if (!left.length) { left = items.filter((x) => x !== last || items.length === 1); for (let i = left.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [left[i], left[j]] = [left[j], left[i]]; } }
+    last = left.pop(); return last;
+  };
+}
+function setBusy(on, kind = state.mode) {
   const res = $('#result');
   res.setAttribute('aria-busy', String(on));
   $('#loading').hidden = !on;
-  clearInterval(loadingTimer);
-  if (on) {
-    let i = Math.floor(Math.random() * lines.length);
-    $('#loading').textContent = lines[i];
-    loadingTimer = setInterval(() => { i = (i + 1) % lines.length; $('#loading').textContent = lines[i]; }, 1100);
-  }
+  clearInterval(lineTimer); clearInterval(gagTimer);
+  if (!on) return;
+  const w = WAIT[kind] || WAIT.roast, next = bag(w.lines), line = $('#waitLine');
+  $('#waitTitle').textContent = w.title;
+  const show = () => { line.textContent = next(); line.classList.remove('swap'); void line.offsetWidth; line.classList.add('swap'); };
+  show(); lineTimer = setInterval(show, 2500);
+  // Gag bar: eases toward 99% (8 s ≈ 55%, 20 s ≈ 89%, 37 s ≈ 98%), then gets stuck there, on purpose.
+  const t0 = performance.now(), bar = $('#waitBar'), label = $('#waitLabel');
+  const tick = () => {
+    const pc = Math.min(99, Math.floor(99 * (1 - Math.exp(-(performance.now() - t0) / 9000))));
+    bar.style.width = pc + '%';
+    label.textContent = pc >= 98 ? `${w.gag[4]}: 99%… 99%… 99%` : `${w.gag[Math.min(4, Math.floor(pc / 20))]}: ${pc}%`;
+  };
+  tick(); gagTimer = setInterval(tick, 250);
+  showWaitChef('judging');
+}
+function showWaitChef(expr) {
+  const slot = $('#waitChefSlot'), c = waitChef();
+  const was = slot.hidden;
+  slot.hidden = false; setExpr(c, expr); delete c.dataset.react;
+  c.classList.toggle('wobble', expr === 'judging');
+  if (was) play(c, 'pop');
+  if (expr === 'shocked') c.dataset.react = 'beat';
 }
 
-function hideOutputs() { $('#panel').hidden = true; $('#actions').hidden = true; $('#error').hidden = true; }
+function hideOutputs() { $('#panel').hidden = true; $('#actions').hidden = true; $('#error').hidden = true; endReveal(); }
 
 async function run({ force = false, demoOnly = false, attempt = 0 } = {}) {
   state.ctrl?.abort();
@@ -194,15 +200,15 @@ async function run({ force = false, demoOnly = false, attempt = 0 } = {}) {
   const needsCall = ai && !(mode === 'fridge' && state.fridge && !state.fridge.confirmed);
   if (needsCall && !(await confirmAge())) ai = false;
   if (ctrl.signal.aborted) return;
-  if (!ai && !demoOnly && why === 'budget') setNote(`You’ve used today’s real reads. Here’s Chef’s demo take. Fresh reads at ${nextResetLocal()}.`, 'budget');
+  if (!ai && !demoOnly && why === 'budget') setNote(`Today’s real reads are used up. Demo take. Fresh reads at ${nextResetLocal()}.`, 'budget');
   if (!ai && !demoOnly && why === 'closed') refreshKitchen();
 
   // Fridge Chef with real AI: step 1 = read the photo into a checklist, step 2 = recipe from the confirmed list.
   if (mode === 'fridge' && ai && (!state.fridge || !state.fridge.confirmed)) {
     if (state.fridge) { showChecklist(); return; }
     const check = photoCheck(state.photo);
-    if (check.blank) { showError(check.dark ? 'That photo’s basically pitch black. Try again with the fridge light on!' : 'That photo looks blank to me. Try a closer shot of your fridge shelves.', mode, true); return; }
-    setBusy(true, COPY.fridge.scanLoading);
+    if (check.blank) { showError(check.dark ? 'Pitch black. Turn the fridge light on.' : 'Looks blank. Get closer to the shelves.', mode, true); return; }
+    setBusy(true, 'scan');
     try {
       const scan = await analyse({ ...aiArgs(), task: 'fridgeScan', dataUrl: fridgeDataUrl(), signal: ctrl.signal });
       spendOne();
@@ -217,7 +223,7 @@ async function run({ force = false, demoOnly = false, attempt = 0 } = {}) {
     }
     return;
   }
-  setBusy(true, mode === 'fridge' && ai ? COPY.fridge.recipeLoading : COPY[mode].loading);
+  setBusy(true, mode);
   let result, source;
   try {
     if (ai) {
@@ -231,7 +237,7 @@ async function run({ force = false, demoOnly = false, attempt = 0 } = {}) {
       source = 'ai';
     } else {
       await new Promise((r) => setTimeout(r, state.sampleId || demoOnly ? 250 : 650 + Math.random() * 500));
-      result = demoResult(mode, state.features, state.sampleId, state.roll);
+      result = demoResult(mode, state.features, state.sampleId);
       source = 'demo';
     }
   } catch (e) {
@@ -243,7 +249,7 @@ async function run({ force = false, demoOnly = false, attempt = 0 } = {}) {
   if (ctrl.signal.aborted || mode !== state.mode) return;
   setBusy(false);
   state.result = result; state.source = source;
-  showResult();
+  showResult({ instant: demoOnly });
   if (demoOnly) offerRealTake(mode);
 }
 
@@ -252,7 +258,7 @@ function offerRealTake(mode) {
   const cost = callCost(mode);
   if (!wantsAI(cost)) return;
   const n = setNote('', 'real-take'); n.hidden = false;
-  const b = el('button', 'btn btn-small real-take-btn', budgeted() ? `Get Chef’s real take (uses ${cost} of today’s ${budget().left})` : 'Get Chef’s real take');
+  const b = el('button', 'btn btn-small real-take-btn', budgeted() ? `Get a real read (uses ${cost} of today’s ${budget().left})` : 'Get a real read');
   b.type = 'button'; b.id = 'realTakeBtn';
   b.onclick = () => { setNote(''); run({ force: true }); };
   n.append(b);
@@ -263,14 +269,14 @@ let retryTimer;
 function aiFailed(e, mode, offerManual, attempt) {
   if (e instanceof AIError && e.kind === 'rate_day') {
     closeKitchen(); refreshKitchen();
-    state.result = demoResult(mode, state.features, state.sampleId, state.roll); state.source = 'demo';
-    showResult();
-    setNote(`Chef’s off duty till ${nextResetLocal()}. Here’s a demo take meanwhile.`, 'closed');
+    state.result = demoResult(mode, state.features, state.sampleId); state.source = 'demo';
+    showResult({ instant: true });
+    setNote(`Chef’s off till ${nextResetLocal()}. Demo take for now.`, 'closed');
     return;
   }
   if (e instanceof AIError && e.kind === 'rate' && attempt < 2) {
     let left = 20;
-    const tick = () => { $('#errorMsg').textContent = `Kitchen’s slammed, trying again in ${left} s… `; };
+    const tick = () => { $('#errorMsg').textContent = `Busy kitchen. Retrying in ${left} s. `; };
     showError('', mode, offerManual, 'Show me a demo now');
     tick();
     const ctrl = state.ctrl;
@@ -283,24 +289,25 @@ function aiFailed(e, mode, offerManual, attempt) {
     }, 1000);
     return;
   }
-  showError(e instanceof AIError ? e.message : 'Oops, something went sideways. Give it another shot.', mode, offerManual);
+  showError(e instanceof AIError ? e.message : 'Something broke. Try again.', mode, offerManual);
 }
 
-function showError(msg, mode, offerManual, demoLabel = 'Show me a demo result instead') {
+function showError(msg, mode, offerManual, demoLabel = 'Show me a demo') {
   const box = $('#error');
   box.innerHTML = '';
   const m = el('span', null, msg ? msg + ' ' : ''); m.id = 'errorMsg'; box.append(m);
   const b = document.createElement('button');
   b.type = 'button'; b.className = 'link'; b.id = 'demoNowBtn'; b.textContent = demoLabel;
-  b.onclick = () => { clearInterval(retryTimer); state.ctrl?.abort(); state.result = demoResult(mode, state.features, state.sampleId, state.roll); state.source = 'demo'; box.hidden = true; showResult(); };
+  b.onclick = () => { clearInterval(retryTimer); state.ctrl?.abort(); state.result = demoResult(mode, state.features, state.sampleId); state.source = 'demo'; box.hidden = true; showResult(); };
   box.append(b);
   if (offerManual && mode === 'fridge') {
     const m = document.createElement('button');
-    m.type = 'button'; m.className = 'link'; m.id = 'typeInsteadBtn'; m.textContent = 'Type my ingredients instead';
+    m.type = 'button'; m.className = 'link'; m.id = 'typeInsteadBtn'; m.textContent = 'Type my ingredients';
     m.onclick = () => { state.fridge = makeChecklist({ items: [], photoQuality: 'good', summary: '' }); state.fridge.manual = true; box.hidden = true; showChecklist(); };
     box.append(' · ', m);
   }
   box.hidden = false;
+  showWaitChef('shocked');
   $('#actions').hidden = false;
   $('#shareBtn').hidden = true;
   $('#editBtn').hidden = true;
@@ -325,17 +332,17 @@ function showChecklist() {
   p.className = 'panel fridge checklist';
   p.replaceChildren();
   p.append(el('p', 'eyebrow', 'Step 1 of 2 · Check the haul'));
-  p.append(el('h2', null, f.manual ? 'What’ve you got?' : f.items.length ? 'Here’s what I spotted' : 'Hmm, I came up empty'));
+  p.append(el('h2', null, f.manual ? 'What’ve you got?' : f.items.length ? 'Here’s what I see.' : 'Nothing. Not even mustard.'));
   if (f.summary) p.append(el('p', 'desc', f.summary));
   const warn = f.manual ? '' : !f.items.length ? QUALITY_WARNING.no_food : QUALITY_WARNING[f.photoQuality] || '';
   if (warn) p.append(el('p', 'ck-warning', warn));
-  p.append(el('p', 'ck-help', f.items.length ? 'Tick what’s really there, fix anything I got wrong, and add whatever I missed. “Not sure?” items start unticked.' : 'Add your ingredients one at a time below.'));
+  p.append(el('p', 'ck-help', f.items.length ? 'Untick what’s wrong. Add what I missed.' : 'Add things one at a time.'));
 
   const ul = el('ul', 'checklist'); ul.id = 'checklist';
   const count = () => f.items.filter((i) => i.checked && i.name.trim()).length;
   const cook = el('button', 'btn btn-primary btn-xl cook-btn');
   cook.type = 'button'; cook.id = 'cookBtn';
-  const refreshCook = () => { const n = count(); cook.disabled = n === 0; cook.textContent = n ? `Cook up tonight’s special (${n} item${n === 1 ? '' : 's'})` : 'Tick at least one ingredient'; };
+  const refreshCook = () => { const n = count(); cook.disabled = n === 0; cook.textContent = n ? `Cook it (${n} item${n === 1 ? '' : 's'})` : 'Tick something first'; };
 
   const renderItem = (it) => {
     const li = el('li', `ck-item conf-${it.confidence}`); li.dataset.id = it.id;
@@ -363,7 +370,7 @@ function showChecklist() {
 
   const add = el('form', 'ck-add'); add.id = 'ckAdd';
   const addInput = el('input'); addInput.type = 'text'; addInput.id = 'ckAddInput'; addInput.maxLength = 60; addInput.autocomplete = 'off';
-  addInput.placeholder = f.items.length ? 'Add something I missed' : 'Add an ingredient (like eggs)';
+  addInput.placeholder = f.items.length ? 'Add something I missed' : 'Add an ingredient';
   addInput.setAttribute('aria-label', 'Add an ingredient');
   const addBtn = el('button', 'btn btn-small', 'Add'); addBtn.type = 'submit';
   add.append(addInput, addBtn);
@@ -371,7 +378,7 @@ function showChecklist() {
     e.preventDefault();
     const v = addInput.value.trim();
     if (!v) return;
-    if (f.items.length >= 30) { toast('That’s plenty! 30 items max.'); return; }
+    if (f.items.length >= 30) { toast('30 items max. Plenty.'); return; }
     const it = { id: ++itemSeq, name: v.slice(0, 60), quantity: '', confidence: 'added', note: '', checked: true };
     f.items.push(it); ul.append(renderItem(it)); addInput.value = ''; refreshCook(); addInput.focus();
   };
@@ -379,62 +386,129 @@ function showChecklist() {
 
   cook.onclick = () => { f.items = f.items.filter((i) => i.name.trim()); f.confirmed = true; state.roll = 0; run(); };
   refreshCook();
-  p.append(cook, el('p', 'safety', 'Only ticked items go into the recipe (plus basics like oil, salt and pepper).'));
+  p.append(cook, el('p', 'safety', 'Only ticked items. Plus oil, salt, pepper.'));
   const retake = el('button', 'btn btn-ghost ck-retake', 'Retake photo'); retake.type = 'button';
   retake.onclick = () => $('#newBtn').click();
   p.append(retake);
+  $('#waitChefSlot').hidden = true;
   p.hidden = false;
 }
 
 // ───────── Results ─────────
 let resultsThisSession = 0;
-function showResult() {
-  const r = state.result, p = $('#panel');
+const shownScore = (r) => (state.mode === 'menu' || r.score == null || !Number.isFinite(Number(r.score)) ? null : Math.max(0, Math.min(10, Math.round(Number(r.score)))));
+const shortPrice = (price) => (String(price || '').match(/\$\s?[\d,.]+[kKmM]?/) || [String(price || '$∞').slice(0, 7)])[0].replace(/\s/g, '');
+const verdictOf = (r) => (state.mode === 'roast' ? r.headline : r.verdict || r.dishName || r.specialName || '');
+const line = (label, text) => { const p = el('p', 'line'); p.append(el('b', null, label + ' '), text); return p; };
+
+function showResult({ instant = false } = {}) {
+  const r = state.result, p = $('#panel'), mode = state.mode;
   const st = bumpStreak();
   if (++resultsThisSession === 2) setTimeout(() => maybeNudgeInstall('second-result'), 1200);
   refreshDaily(st.milestone);
-  if (st.milestone) toast(`${st.count} days straight! ${APP.chef} is… mildly impressed.`);
-  p.className = 'panel ' + state.mode;
+  if (st.milestone) toast(`${st.count} days straight. ${APP.chef} is mildly impressed.`);
+  const score = shownScore(r), verdict = verdictOf(r);
+  p.className = 'panel ' + mode;
   p.replaceChildren();
-  if (state.source === 'demo') {
-    const banner = el('div', 'demo-banner'); banner.setAttribute('role', 'note');
-    banner.append(el('strong', null, 'Heads up: demo result! '), DEMO_BANNER[state.mode === 'fridge' ? 'fridge' : 'other'] + (aiProvider() ? DEMO_BANNER.live : DEMO_BANNER.off));
-    p.append(banner);
-  }
-  const eyebrow = el('p', 'eyebrow', state.mode === 'fridge' && state.source === 'ai' ? 'Step 2 of 2 · Tonight’s Special' : COPY[state.mode].eyebrow);
-  if (state.source === 'demo') eyebrow.append(el('span', 'demo-tag', 'DEMO'));
-  p.append(eyebrow);
-  if (state.mode === 'menu') {
-    p.append(el('h2', null, r.dishName), el('p', 'desc', r.description));
-    const pr = el('div', 'price-row'); pr.append(el('span', 'price', r.price)); p.append(pr);
-    const n = el('p', 'notes'); n.append(el('b', null, 'CHEF’S NOTES'), '“' + r.chefNotes + '”'); p.append(n);
-    p.append(el('p', 'pairing', 'Pair it with: ' + r.pairing));
-    if (r.spotted?.length) { const ul = el('ul', 'chips'); ul.setAttribute('aria-label', 'Spotted on your plate'); r.spotted.forEach((s) => ul.append(el('li', null, s))); p.append(ul); }
-    p.append(chefSign('menu'));
-  } else if (state.mode === 'roast') {
-    const top = el('div', 'roast-top');
-    const sc = el('div', 'score'); sc.setAttribute('role', 'img'); sc.setAttribute('aria-label', `Score: ${r.score} out of 10`);
-    sc.innerHTML = `<span aria-hidden="true">${r.score}<small>/10</small></span>`;
-    top.append(sc, el('h2', null, r.headline)); p.append(top);
-    const vs = challengeVs();
-    if (vs) p.append(el('p', 'challenge-line ' + (vs.mine > vs.theirs ? 'won' : vs.mine < vs.theirs ? 'lost' : 'tie'), challengeLine(vs)));
-    p.append(el('p', 'roast-quote', r.roast), el('p', 'good', '✓ ' + r.compliment), el('p', 'tip', 'Pro tip: ' + r.fix), chefSign('roast'));
+
+  // The yellow stamp: score out of 10 (roast, fridge) or the price (menu).
+  const sc = el('div', 'score');
+  sc.setAttribute('role', 'img');
+  if (score != null) {
+    sc.setAttribute('aria-label', `${mode === 'fridge' ? 'Fridge rating' : 'Score'}: ${score} out of 10`);
+    const n = el('span', null, String(score)); n.setAttribute('aria-hidden', 'true'); n.append(el('small', null, '/10'));
+    sc.append(n);
+    if (mode === 'fridge') { const k = el('span', 'stamp-kind', 'fridge'); k.setAttribute('aria-hidden', 'true'); sc.prepend(k); }
   } else {
-    p.append(el('h2', null, r.specialName), el('p', 'desc', r.description), el('p', 'ingr', 'Made with: ' + r.ingredients.join(' · ')));
-    const ol = el('ol'); r.steps.forEach((s) => ol.append(el('li', null, s))); p.append(ol);
-    const row = el('p'); row.append(el('span', 'fprice', r.price)); p.append(row);
-    p.append(el('p', 'fnote', '“' + r.note + '”'), chefSign('fridge'), el('p', 'safety', 'Quick reminder: check expiration dates and allergies before you cook. This is for fun, not a guaranteed recipe.'));
+    const pr = shortPrice(r.price);
+    sc.classList.add('price'); if (pr.length > 5) sc.classList.add('long');
+    sc.setAttribute('aria-label', `Price: ${r.price}`);
+    const n = el('span', null, pr); n.setAttribute('aria-hidden', 'true'); sc.append(n);
   }
-  if (r.isFood === false) p.prepend(el('p', 'error', 'Hmm, Chef’s not totally sure that’s food, but he rolled with it anyway.'));
+  const vw = el('div', 'verdict-wrap'), h = el('h2', 'verdict' + (verdict.length > 22 ? ' long' : ''));
+  h.append(el('span', null, verdict)); vw.append(h);
+
+  const d = el('div', 'details');
+  const chef = chefSlot('judging', 'result-chef flip pop');
+  d.append(chef);
+  if (state.source === 'demo') {
+    const banner = el('p', 'demo-banner'); banner.setAttribute('role', 'note');
+    banner.append(el('strong', null, 'DEMO'), ' · sample verdict. ' + DEMO_BANNER[mode === 'fridge' ? 'fridge' : 'other'] + (aiProvider() && !state.sampleId ? DEMO_BANNER.live : ''));
+    d.append(banner);
+  }
+  if (r.isFood === false) d.append(el('p', 'not-food', 'Not sure that’s food. Judged it anyway.'));
+  if (mode === 'roast') {
+    d.append(el('p', 'stamp-line', stampLine(score, verdict)));
+    const vs = challengeVs();
+    if (vs) d.append(el('p', 'challenge-line ' + (vs.mine > vs.theirs ? 'won' : vs.mine < vs.theirs ? 'lost' : 'tie'), challengeLine(vs)));
+    if (r.compliment) d.append(line('Good:', r.compliment));
+    if (r.fix) d.append(line('Fix:', r.fix));
+  } else if (mode === 'menu') {
+    d.append(el('p', 'eyebrow', COPY.menu.eyebrow), el('h3', 'dish', r.dishName));
+    if (r.description) d.append(el('p', 'desc', r.description));
+    d.append(line('Price:', r.price));
+    if (r.pairing) d.append(line('Pair it with:', r.pairing));
+    if (r.spotted?.length) { const ul = el('ul', 'chips'); ul.setAttribute('aria-label', 'Spotted on your plate'); r.spotted.forEach((x) => ul.append(el('li', null, x))); d.append(ul); }
+  } else {
+    d.append(el('p', 'eyebrow', state.source === 'ai' ? 'Step 2 of 2 · Tonight’s special' : COPY.fridge.eyebrow));
+    if (score != null) d.append(el('p', 'stamp-line', stampLine(score, verdict)));
+    d.append(el('h3', 'dish', r.specialName));
+    if (r.description) d.append(el('p', 'desc', r.description));
+    d.append(el('p', 'ingr', 'Made with: ' + r.ingredients.join(' · ')));
+    const ol = el('ol', 'steps'); r.steps.forEach((x) => ol.append(el('li', null, x))); d.append(ol);
+    d.append(line('Price:', r.price));
+    if (r.note) d.append(line('Tip:', r.note));
+  }
+  d.append(el('p', 'byline', '— ' + APP.chef));
+  if (mode === 'fridge') d.append(el('p', 'safety', 'Check dates and allergies. For fun, not advice.'));
+  p.append(sc, vw, d);
+  $('#waitChefSlot').hidden = true;
   p.hidden = false;
-  if (state.challenge?.mode === state.mode) $('#challengeBanner').hidden = true;
+  if (state.challenge?.mode === mode) $('#challengeBanner').hidden = true;
   $('#actions').hidden = false;
   $('#shareBtn').hidden = false;
-  $('#editBtn').hidden = !(state.mode === 'fridge' && state.source === 'ai' && state.fridge);
-  $('#againBtn').textContent = state.source === 'demo' ? 'Another one!' : 'Ask again';
+  $('#editBtn').hidden = !(mode === 'fridge' && state.source === 'ai' && state.fridge);
   $('#shareNote').textContent = '';
+  reveal(score, verdict, chef, instant);
   prerenderCard();
 }
+
+// ───────── Drumroll → reveal ─────────
+// ~1.2 s drumroll (tap anywhere to skip), then the stamp slams, the verdict band stamps in and the chef reacts:
+// a quick shocked beat at the slam, then the band's pose: 9–10 chef's kiss, 7–8 slow clap (+ confetti for 7+),
+// 5–6 judging, 3–4 disgust, 0–2 faint (+ a droop for ≤4). Reduced motion: instant final pose, no confetti.
+let homeChef = null;
+const DRUMROLL_MS = 1200;
+const BEAT_MS = 380;
+let revealTimer = null, revealDone = null, beatTimer = null;
+function endReveal() { clearTimeout(revealTimer); clearTimeout(beatTimer); revealDone = null; const res = $('#result'); res.classList.remove('revealing', 'revealed'); delete res.dataset.reveal; }
+function reveal(score, verdict, chef, instant) {
+  const res = $('#result'), band = bandFor(score), motion = !reducedMotion();
+  endReveal();
+  res.dataset.band = band;
+  const finish = () => {
+    if (revealDone !== finish) return;
+    revealDone = null; clearTimeout(revealTimer);
+    res.classList.remove('revealing'); res.classList.add('revealed'); res.dataset.reveal = 'done';
+    chef.classList.remove('wobble');
+    clearTimeout(beatTimer);
+    if (instant || !motion) react(chef, score);
+    else { setExpr(chef, 'shocked'); chef.dataset.react = 'beat'; beatTimer = setTimeout(() => react(chef, score), BEAT_MS); }
+    $('#revealLive').textContent = `${score != null ? `${score} out of 10. ` : state.result?.price ? `${state.result.price}. ` : ''}${verdict}`;
+    sfx.thud();
+    if (band === 'high' || band === 'top') { setTimeout(() => { sfx.ding(); sfx.applause(); }, 220); if (motion) confetti(); }
+    else if (band === 'low' || band === 'worst') setTimeout(sfx.trombone, 350);
+    else setTimeout(sfx.ding, 200);
+  };
+  revealDone = finish;
+  if (instant || !motion) { finish(); return; }
+  res.dataset.reveal = 'drumroll';
+  res.classList.add('revealing');
+  chef.classList.add('wobble');
+  sfx.drumroll(DRUMROLL_MS / 1000);
+  revealTimer = setTimeout(finish, DRUMROLL_MS);
+}
+const skipReveal = () => { if (revealDone && $('#result').dataset.reveal === 'drumroll') revealDone(); };
 
 // ───────── Share card ─────────
 const cardSize = () => document.querySelector('input[name=cardSize]:checked').value;
@@ -481,11 +555,11 @@ function showChallengeBanner(c) {
   const b = $('#challengeBanner'); b.replaceChildren();
   const p = document.createElement('p');
   const strong = (t) => el('strong', null, t);
-  if (c.mode === 'roast' && c.s != null) p.append('Your friend scored ', strong(`${c.s}/10`), ` with ${APP.chef}. Snap your plate and see if you can beat it.`);
-  else if (c.mode === 'roast') p.append(`Your friend got roasted by ${APP.chef}. Snap your plate and see how yours does.`);
-  else if (c.mode === 'menu' && c.p) p.append('Your friend’s dinner was priced at ', strong('$' + Number(c.p).toLocaleString('en-US')), '. Can yours get fancier?');
-  else if (c.mode === 'menu') p.append('Your friend’s dinner got the fancy menu treatment. Can yours get fancier?');
-  else p.append('Your friend’s fridge made tonight’s special. Raid yours.');
+  if (c.mode === 'roast' && c.s != null) p.append('Your friend got ', strong(`${c.s}/10`), ` from ${APP.chef}. Beat it.`);
+  else if (c.mode === 'roast') p.append(`Your friend got judged by ${APP.chef}. Your turn.`);
+  else if (c.mode === 'menu' && c.p) p.append('Your friend’s dinner: ', strong('$' + Number(c.p).toLocaleString('en-US')), '. Go pricier.');
+  else if (c.mode === 'menu') p.append('Your friend’s dinner got priced. Go pricier.');
+  else p.append('Your friend’s fridge made dinner. Your turn.');
   b.append(el('span', 'challenge-tag', 'Challenge'), p);
   b.hidden = false;
 }
@@ -495,27 +569,28 @@ function challengeVs() {   // roast only: { mine, theirs } when this result answ
   return { mine: Number(state.result.score), theirs: c.s };
 }
 function challengeLine(vs) {
-  if (vs.mine > vs.theirs) return `You beat your friend: ${vs.mine} vs ${vs.theirs} 🏆`;
-  if (vs.mine < vs.theirs) return `Your friend wins this round: ${vs.theirs} vs ${vs.mine}`;
-  return `Dead even with your friend: ${vs.mine} vs ${vs.theirs}`;
+  if (vs.mine > vs.theirs) return `You beat your friend. ${vs.mine} vs ${vs.theirs}.`;
+  if (vs.mine < vs.theirs) return `Your friend wins. ${vs.theirs} vs ${vs.mine}.`;
+  return `Tie. ${vs.mine} vs ${vs.theirs}.`;
 }
 function challengeShare() {
   const r = state.result; if (!r) return;
   const line = state.mode === 'roast' ? `${APP.chef} gave my plate a ${r.score}/10. Think your plate can beat a ${r.score}/10?`
-    : state.mode === 'menu' ? `${APP.chef} priced my dinner at ${r.price}. Can yours get fancier?`
-    : `My fridge just made tonight’s special with ${APP.chef}. Raid yours:`;
+    : state.mode === 'menu' ? `${APP.chef} priced my dinner at ${shortPrice(r.price)}. Go pricier.`
+    : `${APP.chef} judged my fridge. Your turn:`;
   const url = challengeUrl(), note = $('#shareNote');
-  const fallback = () => copyCaption(`${line} ${url}`).then((ok) => { note.textContent = ok ? 'Challenge link copied! Paste it in the group chat.' : `Send this link: ${url}`; });
-  if (navigator.share) navigator.share({ text: line, url }).then(() => { note.textContent = 'Challenge sent. May the best plate win.'; }).catch((e) => { if (e?.name !== 'AbortError' && e?.name !== 'InvalidStateError') fallback(); });
+  const fallback = () => copyCaption(`${line} ${url}`).then((ok) => { note.textContent = ok ? 'Challenge link copied. Paste it in the group chat.' : `Send this link: ${url}`; });
+  if (navigator.share) navigator.share({ text: line, url }).then(() => { note.textContent = 'Challenge sent.'; }).catch((e) => { if (e?.name !== 'AbortError' && e?.name !== 'InvalidStateError') fallback(); });
   else fallback();
 }
 const dailyTag = () => { const d = daily(); return `${APP.name} #${d.n}${d.streak ? ' 🔥' + d.streak : ''}`; };
 
 function caption() {
   const r = state.result;
-  const line = state.mode === 'roast' ? `${APP.chef} gave my plate a ${r.score}/10 😤 Think your plate can beat it?`
-    : state.mode === 'menu' ? `Tonight at ${APP.restaurant}: “${r.dishName}” for ${r.price}. Get your dinner a fancy menu:`
-    : `My fridge just made tonight’s special: “${r.specialName}”. Raid yours:`;
+  const v = verdictOf(r), sc = shownScore(r);
+  const line = state.mode === 'roast' ? `${APP.chef} gave my plate a ${r.score}/10. “${v}” Think yours can beat it?`
+    : state.mode === 'menu' ? `${APP.chef} priced my dinner at ${shortPrice(r.price)}. “${v}” Yours:`
+    : `${APP.chef} judged my fridge${sc != null ? ` (${sc}/10)` : ''}. “${v}” Tonight: ${r.specialName}. Yours:`;
   const url = challengeUrl();
   const tags = ['#ChefGerardo', '#SnootfoodChallenge', MODE_TAG[state.mode]].join(' ');
   const daily = dailyTag();
@@ -534,8 +609,8 @@ function share() {
     // Never await inside the tap: the share sheet needs a fresh user gesture. Get the card ready and ask for one more tap.
     const note = $('#shareNote');
     if (navigator.share) {
-      note.textContent = 'One sec… getting your card ready.';
-      prerenderCard().then((f) => { if (f) note.textContent = 'Ready! Tap Share again.'; });
+      note.textContent = 'One sec… card’s almost ready.';
+      prerenderCard().then((f) => { if (f) note.textContent = 'Ready. Tap Share again.'; });
     } else {
       note.textContent = 'One sec…';
       prerenderCard().then((f) => f && download(f));   // a download doesn't need the gesture
@@ -547,7 +622,7 @@ function share() {
     const copied = copyCaption(c.full);   // not awaited: keep the gesture for navigator.share
     const data = isIOS() ? { files: [file] } : { files: [file], title: APP.name, text: c.full };
     navigator.share(data).then(async () => {
-      $('#shareNote').textContent = (await copied) ? 'Caption copied, paste it in your post.' : 'Shared! Enjoy the hype.';
+      $('#shareNote').textContent = (await copied) ? 'Caption copied. Paste it in your post.' : 'Shared.';
       afterShare();
     }).catch((e) => {
       if (e?.name === 'AbortError' || e?.name === 'InvalidStateError') return;   // closed the sheet, or a share is already open
@@ -559,7 +634,7 @@ function share() {
 }
 
 function syncShareLabel(file) {
-  $('#shareBtn span').textContent = file && canShareFile(file) ? 'Share' : 'Save image';
+  $('#shareBtn span').textContent = file && canShareFile(file) ? 'Share the verdict' : 'Save image';
 }
 
 function download(file) {
@@ -567,8 +642,8 @@ function download(file) {
   const a = document.createElement('a');
   a.href = url; a.download = file.name; document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
-  $('#shareNote').textContent = 'Saved! Post it anywhere and tag your friends.';
-  if (state.result) copyCaption(caption().full).then((ok) => { if (ok) $('#shareNote').textContent = 'Saved! Caption copied too, so paste it in your post.'; });
+  $('#shareNote').textContent = 'Saved. Post it anywhere.';
+  if (state.result) copyCaption(caption().full).then((ok) => { if (ok) $('#shareNote').textContent = 'Saved. Caption copied too.'; });
   afterShare();
 }
 
@@ -577,19 +652,17 @@ function setMode(mode, focus = false) {
   state.mode = mode;
   document.body.dataset.mode = mode;
   if (state.challenge && state.challenge.mode !== mode) $('#challengeBanner').hidden = true;
+  document.querySelectorAll('#swapModes [data-swap]').forEach((b) => { b.hidden = b.dataset.swap === mode; });
   document.querySelectorAll('.modes [role=tab]').forEach((t) => {
     const on = t.dataset.mode === mode;
     t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1;
     if (on && focus) t.focus();
   });
-  $('#introLine').innerHTML = COPY[mode].intro;
-  const art = APP.chefArt[mode], ic = $('#introChef');
-  $('#introChefSrc').srcset = art.file + '.webp';
-  ic.src = art.file + '.png'; ic.width = art.w; ic.height = art.h; ic.alt = chefAlt(mode);
-  document.querySelector('.intro .speech').dataset.chef = mode;
-  $('#snapLabel').textContent = COPY[mode].snap;
+  $('#introLine').textContent = COPY[mode].intro;
+  const say = $('#introLine'); say.style.animation = 'none'; void say.offsetWidth; say.style.animation = '';
+  if (homeChef) { setExpr(homeChef, budgeted() && kitchenClosed() ? 'shocked' : 'judging'); play(homeChef, 'pop'); }
   history.replaceState(null, '', location.pathname + '#' + mode);
-  if (state.photo && !$('#result').hidden) { state.roll = 0; run({ demoOnly: true }); }
+  if (state.photo && !$('#result').hidden) { state.roll = 0; window.scrollTo(0, 0); run({ demoOnly: true }); }
 }
 
 let toastTimer;
@@ -601,7 +674,7 @@ function toast(msg) {
 // ───────── Plate of the day + streak (QW6) ─────────
 function refreshDaily(stamp = false) {
   const d = daily(), line = $('#dailyLine');
-  line.replaceChildren(el('span', 'daily-plate', `🍽️ Plate of the day #${d.n}: ${d.theme}`));
+  line.replaceChildren(el('span', 'daily-plate', `Plate of the day #${d.n}: ${d.theme}`));
   if (d.streak) line.append(' · ', el('span', 'daily-streak' + (stamp ? ' stamp' : ''), `🔥 ${d.streak}-day streak`));
 }
 
@@ -609,25 +682,37 @@ function refreshDaily(stamp = false) {
 const SEEN = 'snootfood.seen.v1';
 function showTeaser() {
   try { if (localStorage.getItem(SEEN)) return; localStorage.setItem(SEEN, '1'); } catch { return; }
-  const r = demoResult('roast', null, 'noodles', 0);
+  const r = demoResult('roast', null, 'noodles');
   const t = $('#teaser');
   t.replaceChildren();
-  t.append(el('p', 'teaser-eyebrow', `Fresh from ${APP.chef}`));
-  const row = el('div', 'teaser-row');
-  const thumb = new Image(); thumb.src = 'samples/noodles.jpg'; thumb.alt = 'Sample photo: instant noodles'; thumb.width = 84; thumb.height = 84; thumb.className = 'teaser-thumb';
+  t.append(el('p', 'teaser-eyebrow', `Fresh verdict · ${APP.chef}`));
   const sc = el('div', 'score teaser-score'); sc.setAttribute('role', 'img'); sc.setAttribute('aria-label', `Score: ${r.score} out of 10`);
-  sc.innerHTML = `<span aria-hidden="true">${Number(r.score)}<small>/10</small></span>`;
+  const n = el('span', null, String(Number(r.score))); n.setAttribute('aria-hidden', 'true'); n.append(el('small', null, '/10')); sc.append(n);
   const txt = el('div', 'teaser-text');
-  txt.append(el('h3', null, r.headline), el('p', 'roast-quote', (r.roast.match(/^.*?[.!?](?=\s|$)/) || [r.roast])[0]));
-  row.append(thumb, sc, txt);
-  const cta = el('button', 'btn btn-small teaser-cta', 'Now roast yours ↓'); cta.type = 'button'; cta.id = 'teaserCta';
-  cta.onclick = () => { setMode('roast'); t.hidden = true; $('#capture').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
-  t.append(row, cta);
+  txt.append(el('h3', null, r.headline));
+  const cta = el('button', 'btn btn-small btn-primary teaser-cta', 'Now roast yours ↓'); cta.type = 'button'; cta.id = 'teaserCta';
+  cta.onclick = () => { setMode('roast'); t.hidden = true; $('#capture').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' }); };
+  txt.append(cta);
+  t.append(sc, txt);
   t.hidden = false;
 }
 
 // ───────── Wire up ─────────
+function syncToggles() {
+  const on = soundOn(), sb = $('#soundBtn');
+  sb.setAttribute('aria-pressed', String(on)); sb.setAttribute('aria-label', on ? 'Sound on. Turn sound off' : 'Sound off. Turn sound on');
+  const dark = window.snootTheme?.current() === 'dark';
+  $('#themeBtn').setAttribute('aria-label', dark ? 'Dark theme. Switch to light' : 'Light theme. Switch to dark');
+}
 function init() {
+  homeChef = chefSlot(budgeted() && kitchenClosed() ? 'shocked' : 'judging', 'pop'); $('#homeChefSlot').append(homeChef);
+  const wc = chefSlot('judging', 'flip'); $('#waitChefSlot').append(wc); $('#waitChefSlot').hidden = true;
+  $('#ageChefSlot').append(chefSlot('judging'));
+  $('#soundBtn').onclick = () => { setSound(!soundOn()); syncToggles(); if (soundOn()) sfx.ding(); };
+  $('#themeBtn').onclick = () => { window.snootTheme?.toggle(); syncToggles(); };
+  syncToggles();
+  document.addEventListener('pointerdown', skipReveal, true);
+  document.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape') skipReveal(); }, true);
   document.querySelectorAll('[data-app-name]').forEach((e) => (e.textContent = APP.name));
   document.querySelectorAll('[data-app-tagline]').forEach((e) => (e.textContent = APP.tagline));
   document.querySelectorAll('[data-brand]').forEach((e) => (e.textContent = APP.brand));
@@ -639,7 +724,7 @@ function init() {
     const b = document.createElement('button');
     b.type = 'button'; b.dataset.sample = s.id;
     b.setAttribute('aria-label', `Try sample: ${s.label}`);
-    const img = new Image(); img.src = s.src; img.alt = ''; img.width = 160; img.height = 160; img.loading = 'lazy';
+    const img = new Image(); img.src = s.src; img.alt = ''; img.width = 160; img.height = 160;
     b.append(img, el('span', null, s.label));
     b.onclick = () => { if (s.id === 'fridge' && state.mode !== 'fridge') setMode('fridge'); usePhoto(s.src, s.id); };
     li.append(b); list.append(li);
@@ -659,9 +744,10 @@ function init() {
   }
   $('#shareBtn').onclick = share;
   $('#challengeBtn').onclick = challengeShare;
-  $('#againBtn').onclick = () => { state.roll++; run(); };
+  document.querySelectorAll('#swapModes [data-swap]').forEach((b) => { b.onclick = () => setMode(b.dataset.swap); });
+  $('#againBtn').onclick = () => { state.roll++; window.scrollTo(0, 0); run(); };
   $('#editBtn').onclick = () => { if (state.fridge) { state.fridge.confirmed = false; showChecklist(); } };
-  $('#newBtn').onclick = () => { state.ctrl?.abort(); clearInterval(retryTimer); setNote(''); setBusy(false); $('#result').hidden = true; $('#intro').hidden = false; state.photo = null; state.fridge = null; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  $('#newBtn').onclick = () => { state.ctrl?.abort(); clearInterval(retryTimer); setNote(''); setBusy(false); hideOutputs(); $('#result').hidden = true; $('#intro').hidden = false; state.photo = null; state.fridge = null; window.scrollTo(0, 0); if (homeChef) play(homeChef, 'pop'); };
   document.querySelectorAll('input[name=cardSize]').forEach((r) => (r.onchange = () => state.result && prerenderCard()));
 
   $('#settingsBtn').onclick = openSettings;
@@ -680,23 +766,24 @@ function init() {
     if (model && model !== PROVIDERS[id].defaultModel) settings.models[id] = model; else delete settings.models[id];
     settings.forceDemo = $('#forceDemo').checked;
     saveSettings(); refreshDemoPill();
-    toast(activeKey() && !settings.forceDemo ? `Saved! Now using ${PROVIDERS[id].label.split(' · ')[0]}.` : usingAI() ? 'Saved! Using the built-in AI.' : 'Saved! Demo mode is on.');
+    toast(activeKey() && !settings.forceDemo ? `Saved. Using ${PROVIDERS[id].label.split(' · ')[0]}.` : usingAI() ? 'Saved. Using the built-in AI.' : 'Saved. Demo mode.');
   });
   $('#forgetKey').onclick = () => {
     const id = $('#provider').value;
     delete settings.keys[id]; $('#apiKey').value = '';
-    saveSettings(); refreshDemoPill(); toast('Done! Key removed from this device.');
+    saveSettings(); refreshDemoPill(); toast('Key removed from this device.');
   };
 
   state.challenge = readChallenge();
   const initial = state.challenge?.mode || location.hash.slice(1);
-  setMode(COPY[initial] ? initial : 'menu');   // also replaces the URL with #mode, so a reload doesn't repeat the challenge
+  setMode(COPY[initial] ? initial : 'roast');   // also replaces the URL with #mode, so a reload doesn't repeat the challenge
   refreshDemoPill();
   refreshDaily();
   inAppHint();
   if (state.challenge) { showChallengeBanner(state.challenge); try { localStorage.setItem(SEEN, '1'); } catch { /* fine */ } }
   else showTeaser();
   prepareCardAssets();
+  preloadExpressions();
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

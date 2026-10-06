@@ -29,8 +29,8 @@ export function maybeNudgeInstall(reason) {
   write(NUDGE, { ...n, shown: Date.now(), reason });
   const bar = document.querySelector('#installBar');
   bar.querySelector('#installMsg').textContent = ios
-    ? `Keep ${APP.chef} on your home screen for tomorrow’s Plate of the day: tap Share ⬆︎, then “Add to Home Screen.”`
-    : `Keep ${APP.chef} on your home screen for tomorrow’s Plate of the day?`;
+    ? `Put ${APP.chef} on your home screen: tap Share ⬆︎, then “Add to Home Screen.”`
+    : `Put ${APP.chef} on your home screen?`;
   bar.querySelector('#installAdd').hidden = ios;
   bar.querySelector('#installLater').textContent = ios ? 'Got it' : 'Not now';
   bar.hidden = false;

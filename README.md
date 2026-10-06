@@ -12,7 +12,7 @@ Every result has a one-tap **Share** button that renders a 1080×1350 (or 1080×
 
 ## Growth features
 
-- **Demo first.** Sample photos and tab switches always show Chef’s demo take, so they never spend the relay’s daily cap. A real read only happens for your own photo, at most `realCallsPerDay` (3) per device per Pacific day, after a one-time “are you 18+?” check. When the relay says the day’s limit is gone, the app shows “Chef’s off duty till …” and stays in demo mode until midnight Pacific. A per-minute limit gets a short countdown and up to two retries. New visitors see a no-network roast teaser.
+- **Demo first.** Sample photos and tab switches always show Chef’s demo take, so they never spend the relay’s daily cap. A real read only happens for your own photo, at most `realCallsPerDay` (3) per device per Pacific day, after a one-time “are you 18+?” check. When the relay says the day’s limit is gone, the app shows “Chef’s off till …” and stays in demo mode until midnight Pacific. A per-minute limit gets a short countdown and up to two retries. New visitors see a no-network roast teaser.
 - **Share.** One tap shares the card and copies a caption with a link and `#ChefGerardo #SnootfoodChallenge`, plus a mode tag. iOS gets the file only (the caption is on the clipboard). The button says “Save image” where files can’t be shared.
 - **Challenge links.** `?challenge=roast&s=4`, `?challenge=menu&p=189` and `?challenge=fridge` open the right mode with a “Your friend scored 4/10…” banner. Roast answers get a beat/lose line and a card sticker. “Roast a friend’s plate” sends just the text and link.
 - **Story-safe cards.** On 1080×1920 cards, nothing is drawn below y=1560, which leaves room for the reply bar and a link sticker. Every card carries a three-line watermark. Demo takes of your own photo are tagged DEMO TAKE.
@@ -21,6 +21,14 @@ Every result has a one-tap **Share** button that renders a 1080×1350 (or 1080×
 - **Install nudge.** It appears after your first share or second result, never on load. It snoozes for 30 days on “Not now”. iOS shows the Add to Home Screen steps instead. The manifest includes screenshots for the richer install dialog.
 
 `python3 tools/render_assets.py og screenshots` re-renders `og.png` and the manifest screenshots.
+
+## Look and feel (direction C, camera-first)
+
+- **Camera first.** The photo is the full-bleed hero, a few floating pills, a big shutter, and the verdict on a black band with a yellow score stamp. Light and dark follow the system; the ◐ pill flips it and remembers (`snootfood.theme.v1`).
+- **Chef Gerardo reacts.** One animated slot swaps between six expressions (judging, disgust, faint, shocked, slow-clap, chefs-kiss) by score band. See `img/README.md` for the mapping and how to swap art (`tools/prep_chef.py` cleans fringes and writes WebP + PNG).
+- **The wait and the reveal.** While a real read runs (8–37 s), Chef judges on screen with rotating lines (no repeats) and a progress bar that gets stuck at 99% on purpose. Then a ~1.2 s drumroll (tap to skip), a shocked beat, and the stamp slams in. 7+ gets confetti, 4 and under droops. Reduced motion skips all of it.
+- **Sound** is synthesized with WebAudio, off by default; the speaker pill turns it on and remembers (`snootfood.sound.v1`). No audio files, no AudioContext until you opt in.
+- **Font:** Inter Tight, subset to Latin, self-hosted as one 17 KB variable WOFF2.
 
 ## Demo mode vs your own key
 
@@ -43,6 +51,6 @@ Edit `config.js`, then run `node tools/apply-config.mjs` to sync the page title 
 
 ## Credits
 
-Fonts: Playfair Display and Caveat (SIL Open Font License, see `fonts/OFL.txt`). Sample photos, icons and the small chef logo are original illustrations made for this project (`tools/svg`). The Chef Gerardo mascot art (snooty for Fancy Menu, sassy for Chef Roast, excited for Fridge Chef) lives in `img/` as WebP with alpha plus a PNG fallback; `tools/chef-art/cutout.py` rebuilds it from the white-background originals.
+Font: Inter Tight (SIL Open Font License, see `fonts/OFL.txt`). Sample photos, icons and the small chef logo are original illustrations made for this project (`tools/svg`). The Chef Gerardo mascot art (six expressions) lives in `img/` as WebP with alpha plus a PNG fallback; `tools/prep_chef.py` rebuilds it from the final transparent PNGs.
 
 This is a TEST build. It is not indexed by search engines, and it is for entertainment only.

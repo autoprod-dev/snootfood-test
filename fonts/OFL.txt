@@ -1,1 +1,2 @@
-Playfair Display (Copyright 2017 The Playfair Display Project Authors) and Caveat (Copyright 2014 The Caveat Project Authors) are licensed under the SIL Open Font License, Version 1.1: https://openfontlicense.org
+Inter Tight (Copyright 2022 The Inter Project Authors, https://github.com/rsms/inter) is licensed under the SIL Open Font License, Version 1.1: https://openfontlicense.org
+intertight.woff2 is a subset (Latin basics, weights 600–900) made with fontTools; the license allows modified versions under the same terms.

@@ -8,8 +8,8 @@
   "display": "standalone",
   "orientation": "portrait",
   "lang": "en-US",
-  "theme_color": "#1b1411",
-  "background_color": "#f6efe1",
+  "theme_color": "#0b0b0b",
+  "background_color": "#0b0b0b",
   "categories": [
     "food",
     "entertainment",

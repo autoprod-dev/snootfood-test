@@ -8,18 +8,17 @@ export const APP = {
   restaurant: 'The Snoot Room',
   chef: 'Chef Gerardo',
   chefShort: 'Gerardo',
-  // Chef Gerardo mascot art, one mood per feature. Each has a .webp (alpha) and a .png fallback, 512 px tall.
-  chefArt: {
-    menu: { file: 'img/chef-gerardo-fancy-menu', w: 588, h: 512, mood: 'snooty' },
-    roast: { file: 'img/chef-gerardo-chef-roast', w: 323, h: 512, mood: 'sassy' },
-    fridge: { file: 'img/chef-gerardo-fridge-chef', w: 383, h: 512, mood: 'excited' },
-  },
+  // Chef Gerardo's expressions. Each one is img/chef-<name>.webp (alpha) + img/chef-<name>.png (fallback),
+  // made from the final art by tools/prep_chef.py. To swap art, drop in files with the same names
+  // (keep the transparent background) and bump the sw.js VERSION. See img/README.md.
+  chefExpressions: ['judging', 'disgust', 'faint', 'shocked', 'slow-clap', 'chefs-kiss'],
+  chefSize: { w: 360, h: 360 },
   brand: 'Autoprod',
   url: 'https://autoprod-dev.github.io/snootfood-test/',
   shortUrl: 'autoprod-dev.github.io/snootfood-test',
   isTest: true,
-  themeColour: '#1b1411',
-  backgroundColour: '#f6efe1',
+  themeColour: '#0b0b0b',
+  backgroundColour: '#0b0b0b',
   // Real photo reading without a user key goes through a relay that holds the Gemini key, so the key
   // is never in this site. Two interchangeable relays live in the repo:
   //   • Google Apps Script web app (/relay-gas):  'https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec'

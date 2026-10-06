@@ -105,7 +105,7 @@ with sync_playwright() as p:
     conf_block = conf_block[conf_block.find('Confirmed ingredients'):conf_block.find('Give it')]
     check('recipe prompt has exactly the confirmed items', all(x in conf_block for x in ['eggs (about 6)', 'cheddar cheese (half a block)', 'baby spinach (1 head)', 'hot sauce']) and not any(x in conf_block for x in ['milk', 'tomatoes', 'butter', 'lettuce']), conf_block)
     text = pg.inner_text('#panel')
-    check('recipe rendered, step 2 label, no demo banner', 'Spinach and Cheddar Victory Omelet' in text and 'STEP 2 OF 2' in text.upper() and 'demo result' not in text.lower())
+    check('recipe rendered, step 2 label, no demo banner', 'Spinach and Cheddar Victory Omelet' in text and 'STEP 2 OF 2' in text.upper() and 'sample verdict' not in text.lower())
     check('invented ingredient (bacon) filtered out of the recipe', 'bacon' not in pg.inner_text('#panel .ingr').lower(), pg.inner_text('#panel .ingr'))
     pg.screenshot(path=str(SHOTS / 'mobile-fridge-ai-recipe.png'), full_page=True)
     with pg.expect_download() as d: pg.click('#shareBtn')
@@ -119,7 +119,7 @@ with sync_playwright() as p:
     ctx.close()
 
     # ── 2. Quality warnings + empty fridge + manual entry ──
-    for quality, items, needle in [('blurry', SCAN['items'][:2], 'blurry'), ('dark', SCAN['items'][:2], 'dark in there'), ('no_food', [], 'couldn’t spot any food')]:
+    for quality, items, needle in [('blurry', SCAN['items'][:2], 'Blurry'), ('dark', SCAN['items'][:2], 'dark in there'), ('no_food', [], 'No food spotted')]:
         ctx = browser.new_context(**PHONE)
         def make(q, it):
             return lambda r: r.fulfill(status=200, headers={'access-control-allow-origin': '*', 'content-type': 'application/json'}, body=gemini_reply({'isFood': bool(it), 'photoQuality': q, 'items': it}))
@@ -144,14 +144,14 @@ with sync_playwright() as p:
         check(f'error: {label}', needle in msg, msg[:120])
         return ctx, pg
     ctx, pg = err_case('bad key', lambda r: r.fulfill(status=400, headers={'access-control-allow-origin': '*'}, body='{"error":{"message":"API key not valid. Please pass a valid API key."}}'), 'key didn’t work'); ctx.close()
-    ctx, pg = err_case('quota (429) → auto-retry countdown', lambda r: r.fulfill(status=429, headers={'access-control-allow-origin': '*'}, body='{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}'), 'trying again in')
+    ctx, pg = err_case('quota (429) → auto-retry countdown', lambda r: r.fulfill(status=429, headers={'access-control-allow-origin': '*'}, body='{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}'), 'Retrying in')
     check('429 countdown offers "Show me a demo now"', pg.is_visible('#demoNowBtn') and 'demo now' in pg.inner_text('#demoNowBtn')); ctx.close()
     ctx, pg = err_case('network down', lambda r: r.abort('internetdisconnected'), 'Can’t reach the AI')
     check('error offers demo + "type my ingredients" fallbacks', pg.is_visible('#error button') and pg.is_visible('#typeInsteadBtn'))
     pg.click('#typeInsteadBtn'); pg.wait_for_selector('#ckAdd')
     check('"type my ingredients" opens an empty manual checklist', 'What’ve you got?' in pg.inner_text('#panel'))
     ctx.close()
-    ctx, pg = err_case('blank / pitch-black photo caught before sending', None, 'pitch black', photo={'color': (0, 0, 0), 'noise': False})
+    ctx, pg = err_case('blank / pitch-black photo caught before sending', None, 'Pitch black', photo={'color': (0, 0, 0), 'noise': False})
     pg.screenshot(path=str(SHOTS / 'mobile-fridge-error-blank.png'), full_page=True); ctx.close()
 
     # ── 4. Relays: no key in the browser ──
@@ -185,7 +185,8 @@ with sync_playwright() as p:
     with_relay(ctx, 'https://script.google.com/macros/s/TESTDEPLOYMENT/exec')
     ctx.route('https://script.google.com/**', lambda r: r.fulfill(status=200, headers={'access-control-allow-origin': '*', 'content-type': 'application/json'}, body=json.dumps({'ok': False, 'error': {'code': 'quota', 'message': 'That’s the daily limit for real photo reading. Come back tomorrow, or grab a demo result.'}})))
     pg = ctx.new_page(); setup(ctx, pg, key=False); upload(pg); pg.wait_for_selector('#panel:not([hidden])', timeout=10000)
-    check('apps script: daily limit → kitchen closed, demo take shown straight away', 'off duty' in pg.inner_text('#runNote') and 'DEMO' in pg.inner_text('#panel') and pg.is_visible('#kitchenBanner'), pg.inner_text('#runNote'))
+    check('apps script: daily limit → kitchen closed, demo take shown straight away', 'off till' in pg.inner_text('#runNote') and 'DEMO' in pg.inner_text('#panel'), pg.inner_text('#runNote'))
+    pg.click('#newBtn'); check('apps script: home shows the kitchen-closed banner', pg.is_visible('#kitchenBanner'))
     ctx.close()
     # Cloudflare Worker
     ctx = browser.new_context(**PHONE)

@@ -82,22 +82,20 @@ with sync_playwright() as p:
     check('noindex meta present', 'noindex' in (pg.get_attribute('meta[name=robots]', 'content') or ''))
     check('demo pill visible without key', pg.is_visible('#demoPill'))
     pg.screenshot(path=str(SHOTS / 'phone-1-home.png'), full_page=True)
-    intro = {}
-    for m in ('menu', 'roast', 'fridge'):
-        pg.click(f'.modes [data-mode={m}]'); pg.wait_for_function("() => { const i = document.querySelector('#introChef'); return i.complete && i.naturalWidth > 0; }")
-        intro[m] = pg.evaluate("() => { const i = document.querySelector('#introChef'); return [i.alt, i.currentSrc.split('/').pop(), i.getBoundingClientRect().height]; }")
-    check('home: chef art swaps per mode (snooty / sassy / excited), fixed height, alt text', intro['menu'][0].endswith('snooty') and intro['roast'][0].endswith('sassy') and intro['fridge'][0].endswith('excited') and 'fancy-menu' in intro['menu'][1] and 'chef-roast' in intro['roast'][1] and all(v[2] > 100 for v in intro.values()), str(intro))
+    hc = pg.evaluate("() => { const s = document.querySelector('#homeChefSlot .chef-slot'), i = s.querySelector('img'), r = s.getBoundingClientRect(); return [s.dataset.expr, i.complete && i.naturalWidth > 0, i.currentSrc.split('/').pop(), Math.round(r.width), Math.round(r.height), i.alt, !!s.querySelector('.art-tag') && s.querySelector('.art-tag').textContent]; }")
+    check('home: big chef slot (≥45% of the width), judging expression, final art loaded, alt text, no "new art coming" tag', hc[0] == 'judging' and hc[1] and hc[2] == 'chef-judging.webp' and hc[3] >= 0.45 * 390 and hc[4] >= 200 and hc[5].startswith('Chef Gerardo') and hc[6] is False, str(hc))
     pg.click('.modes [data-mode=menu]')
-    expect = {'menu': ('noodles', 'CHEF’S NOTES'), 'roast': ('beans', '/10'), 'fridge': ('fridge', 'Made with:')}
+    expect = {'menu': ('noodles', 'Pair it with:'), 'roast': ('beans', 'Fix:'), 'fridge': ('fridge', 'Made with:')}
     for mode, (sample, marker) in expect.items():
         text, card = run_mode(pg, mode, sample, shot=f'phone-{ {"menu":2,"roast":3,"fridge":4}[mode] }-{mode}.png', card=f'card-{mode}.png')
         check(f'{mode}: demo result rendered', marker in text and 'DEMO' in text, text[:70].replace('\n', ' '))
-        check(f'{mode}: demo banner says it is not a read of the photo', 'demo result' in text.lower() and ('not a read of your photo' in text or 'not what’s in your fridge' in text))
+        check(f'{mode}: demo banner says it is not a read of the photo', 'sample verdict' in text.lower() and ('Not a read of your photo' in text or 'Not your fridge' in text), text[:90].replace('\n', ' '))
         check(f'{mode}: share card PNG 1080x1350', card_dims(card) == (1080, 1350), str(card_dims(card)))
         if mode == 'roast': check('roast: signed by Chef Gerardo', '— Chef Gerardo' in text, text[-120:].replace('\n', ' '))
-        sign = pg.evaluate("() => { const i = document.querySelector('#panel .sign-chef img'); return i && [i.complete && i.naturalWidth > 0, i.alt, i.getAttribute('width'), i.getAttribute('height'), i.currentSrc]; }")
-        mood = {'menu': 'snooty', 'roast': 'sassy', 'fridge': 'excited'}[mode]
-        check(f'{mode}: result shows Chef Gerardo ({mood}) art, loaded, with alt + size', bool(sign) and sign[0] and sign[1] == f'Chef Gerardo, looking {mood}' and sign[2] and sign[3], str(sign))
+        pg.wait_for_selector('#result[data-reveal=done]'); pg.wait_for_timeout(900)
+        rc = pg.evaluate("() => { const s = document.querySelector('#panel .result-chef'), i = s.querySelector('img'), lab = document.querySelector('#panel .score').getAttribute('aria-label'); const m = lab.match(/(\\d+) out of 10/); return [s.dataset.expr, i.complete && i.naturalWidth > 0, i.currentSrc.split('/').pop(), m ? Number(m[1]) : null, document.querySelector('#result').dataset.band]; }")
+        want = 'slow-clap' if rc[3] is None else 'faint' if rc[3] <= 2 else 'disgust' if rc[3] <= 4 else 'judging' if rc[3] <= 6 else 'slow-clap' if rc[3] <= 8 else 'chefs-kiss'
+        check(f'{mode}: chef expression matches the score band (score {rc[3]} → {want}), art swapped + loaded', rc[0] == want and rc[1] and rc[2] == f'chef-{want}.webp', str(rc))
     text, card = run_mode(pg, 'roast', 'pie', card='card-roast-story.png', story=True)
     check('story-size card 1080x1920', card_dims(card) == (1080, 1920), str(card_dims(card)))
     # variety: "Another take" changes the result for an uploaded (non-sample) photo
@@ -105,17 +103,17 @@ with sync_playwright() as p:
     big = io.BytesIO(); Image.new('RGB', (3000, 2000), (60, 140, 50)).save(big, 'JPEG'); big.seek(0)
     pg.click('#newBtn'); pg.click('.modes [data-mode=menu]')
     pg.set_input_files('#uploadInput', files=[{'name': 'salad.jpg', 'mimeType': 'image/jpeg', 'buffer': big.getvalue()}])
-    pg.wait_for_selector('#panel:not([hidden])'); first = pg.inner_text('#panel h2')
+    pg.wait_for_selector('#panel:not([hidden])'); first = pg.inner_text('#panel h2'); first_all = pg.inner_text('#panel')
     seen = {first}
     for _ in range(3):
         pg.click('#againBtn'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(100); seen.add(pg.inner_text('#panel h2'))
-    check('upload works + green photo gets a green-tone dish', any(w in first for w in ('Garden', 'Salad')), first)
+    check('upload works + green photo gets a green-tone dish', any(w in first_all for w in ('Garden', 'Salad')), first_all[:120])
     check('"Another take" gives varied results', len(seen) >= 2, ' | '.join(seen))
     nat = pg.evaluate("() => { const i = document.querySelector('#photo'); return [i.naturalWidth, i.naturalHeight]; }")
     check('upload resized client-side (≤1600 px, no upscaling)', max(nat) <= 1600, str(nat))
     # keyboard tabs
-    pg.click('#newBtn'); pg.focus('#tab-menu'); pg.keyboard.press('ArrowRight')
-    check('arrow keys move between mode tabs', pg.get_attribute('#tab-roast', 'aria-selected') == 'true')
+    pg.click('#newBtn'); pg.focus('#tab-roast'); pg.keyboard.press('ArrowRight')
+    check('arrow keys move between mode tabs', pg.get_attribute('#tab-menu', 'aria-selected') == 'true')
     # settings screenshot
     pg.click('#settingsBtn'); pg.wait_for_selector('#settings[open]'); pg.wait_for_timeout(400)
     pg.screenshot(path=str(SHOTS / 'phone-5-settings.png'))
@@ -154,7 +152,7 @@ with sync_playwright() as p:
     pg.goto(BASE + '?source=pwa'); pg.wait_for_selector('#sampleList button', timeout=10000)
     check('offline: app shell loads', 'Snootfood' in pg.inner_text('header'))
     text, card = run_mode(pg, 'menu', 'pie')
-    check('offline: demo mode + share card work', 'CHEF’S NOTES' in text and card_dims(card) == (1080, 1350))
+    check('offline: demo mode + share card work', 'Pair it with:' in text and card_dims(card) == (1080, 1350))
     ctx.set_offline(False)
     errs += perrs
     ctx.close()
@@ -192,7 +190,7 @@ with sync_playwright() as p:
         for mode, sample in [('menu', 'pie'), ('roast', 'beans'), ('fridge', 'fridge')]:
             text, card = run_mode(pg, mode, sample, card=f'_tmp-{prov}-{mode}.png', upload=True)
             check(f'{prov} {mode}: mocked AI result rendered', 'Mock' in text and 'DEMO' not in text, text[:60].replace('\n', ' '))
-            if mode == 'roast': check(f'{prov}: score clamped to 10 and PG filter applied', '10/10' in text.replace('\n', '') and 'damn' not in text)
+            if mode == 'roast': check(f'{prov}: score clamped to 10 and PG filter applied', '10 out of 10' in (pg.get_attribute('#panel .score', 'aria-label') or '') and pg.inner_text('#panel .score').split()[0] == '10' and 'damn' not in text, pg.get_attribute('#panel .score', 'aria-label'))
         url, headers, body = captured[0]
         check(f'{prov}: key not in URL', 'TEST-KEY' not in url)
         if prov == 'gemini':
@@ -215,7 +213,8 @@ with sync_playwright() as p:
     pg.goto(BASE); pg.evaluate("localStorage.setItem('snootfood.settings.v1', JSON.stringify({provider:'gemini', keys:{gemini:'X'}}))"); pg.reload()
     upload_sample(pg, 'noodles'); pg.wait_for_selector('#error:not([hidden])')
     t1 = pg.inner_text('#error'); pg.wait_for_timeout(2100); t2 = pg.inner_text('#error')
-    check('429 → "Kitchen’s slammed" countdown that ticks down', 'trying again in' in t1 and t1 != t2, f'{t1[:50]} → {t2[:50]}')
+    check('429 → "Busy kitchen" countdown that ticks down', 'Retrying in' in t1 and t1 != t2, f'{t1[:50]} → {t2[:50]}')
+    check('429 countdown: chef stays on screen, shocked', pg.is_visible('#waitChefSlot') and pg.get_attribute('#waitChefSlot .chef-slot', 'data-expr') == 'shocked')
     pg.click('#demoNowBtn'); pg.wait_for_selector('#panel:not([hidden])')
     check('error → demo fallback works', 'DEMO' in pg.inner_text('#panel'))
     ctx.close()
@@ -275,7 +274,7 @@ with sync_playwright() as p:
     pg.screenshot(path=str(SHOTS / 'qw1-age-gate.png'))
     pg.click('#ageYes'); pg.wait_for_selector('#panel.roast:not([hidden])')
     check('after "Yes": one real call, AI result shown', len(calls) == 1 and 'Mock headline' in pg.inner_text('#panel'), str(len(calls)))
-    pg.click('.modes [data-mode=menu]'); pg.wait_for_selector('#panel.menu:not([hidden])'); pg.wait_for_timeout(300)
+    pg.click('#swapModes [data-swap=menu]'); pg.wait_for_selector('#panel.menu:not([hidden])'); pg.wait_for_timeout(300)
     check('tab switch after an AI result: no new call, demo take + "real take" button', len(calls) == 1 and 'DEMO' in pg.inner_text('#panel') and 'uses 1 of today’s 2' in pg.inner_text('#runNote'), pg.inner_text('#runNote'))
     pg.click('#realTakeBtn'); pg.wait_for_selector('#panel.menu:not([hidden])'); pg.wait_for_function("() => document.querySelector('#panel').innerText.includes('Mock Soufflé')")
     check('"Get Chef’s real take" spends exactly one call, no second 18+ prompt', len(calls) == 2 and not pg.is_visible('#ageGate'), str(len(calls)))
@@ -291,9 +290,11 @@ with sync_playwright() as p:
     ctx.add_init_script(AGE_OK)
     pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
     pg.click('.modes [data-mode=roast]'); upload_sample(pg, 'beans'); pg.wait_for_selector('#panel:not([hidden])')
-    check('daily limit reply → kitchen closed banner + demo take straight away', pg.is_visible('#kitchenBanner') and 'off duty' in pg.inner_text('#runNote') and 'DEMO' in pg.inner_text('#panel') and len(calls) == 1)
+    check('daily limit reply → kitchen closed note + demo take straight away', 'off till' in pg.inner_text('#runNote') and 'DEMO' in pg.inner_text('#panel') and len(calls) == 1)
     pg.screenshot(path=str(SHOTS / 'qw1-kitchen-closed.png'))
-    pg.click('#newBtn'); upload_sample(pg, 'pie'); pg.wait_for_selector('#panel:not([hidden])'); pg.reload(); pg.wait_for_load_state('networkidle')
+    pg.click('#newBtn'); check('home shows the kitchen-closed banner + shocked chef', pg.is_visible('#kitchenBanner') and pg.get_attribute('#homeChefSlot .chef-slot', 'data-expr') == 'shocked')
+    upload_sample(pg, 'pie'); pg.wait_for_selector('#panel:not([hidden])'); pg.reload(); pg.wait_for_load_state('networkidle')
+    pg.goto(BASE)
     check('kitchen stays closed for the rest of the Pacific day (no more calls, banner on reload)', len(calls) == 1 and pg.is_visible('#kitchenBanner'), str(len(calls)))
     errs += qerrs; ctx.close()
 
@@ -318,11 +319,11 @@ with sync_playwright() as p:
     pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
     downloads = []; pg.on('download', lambda d: downloads.append(d))
     pg.click('.modes [data-mode=menu]'); pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])')
-    pg.wait_for_function("() => document.querySelector('#shareBtn span').textContent === 'Share'", timeout=5000)
-    check('share button says "Share" when files can be shared', pg.inner_text('#shareBtn span') == 'Share')
+    pg.wait_for_function("() => document.querySelector('#shareBtn span').textContent === 'Share the verdict'", timeout=5000)
+    check('share button says "Share the verdict" when files can be shared', pg.inner_text('#shareBtn span') == 'Share the verdict')
     pg.click('#shareBtn'); pg.wait_for_function("() => window.__shares.length === 1"); pg.wait_for_timeout(300)
     sh = pg.evaluate('window.__shares[0]'); clip = pg.evaluate('navigator.clipboard.readText()')
-    check('share: card file + caption with link and #ChefGerardo #SnootfoodChallenge #FancyMenu', len(sh['files']) == 1 and sh['title'] == 'Snootfood' and '#ChefGerardo #SnootfoodChallenge #FancyMenu' in sh['text'] and 'autoprod-dev.github.io/snootfood-test/' in sh['text'] and 'Get your dinner a fancy menu' in sh['text'], str(sh))
+    check('share: card file + caption with link and #ChefGerardo #SnootfoodChallenge #FancyMenu', len(sh['files']) == 1 and sh['title'] == 'Snootfood' and '#ChefGerardo #SnootfoodChallenge #FancyMenu' in sh['text'] and 'autoprod-dev.github.io/snootfood-test/' in sh['text'] and 'priced my dinner at $' in sh['text'], str(sh))
     check('share: caption copied to clipboard + "Caption copied" note', clip == sh['text'] and 'Caption copied' in pg.inner_text('#shareNote'), pg.inner_text('#shareNote'))
     pg.screenshot(path=str(SHOTS / 'qw2-share-caption-note.png'))
     for mode_, want in (('AbortError', 0), ('InvalidStateError', 0), ('NotAllowedError', 1)):
@@ -337,7 +338,7 @@ with sync_playwright() as p:
     pg.click('#newBtn'); pg.click('.modes [data-mode=roast]'); pg.click('[data-sample=beans]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(800)
     pg.evaluate("window.__shares = []"); pg.click('#shareBtn'); pg.wait_for_function("() => window.__shares.length === 1")
     t = pg.evaluate('window.__shares[0].text')
-    check('roast caption: score, American copy, #RateMyPlate', '/10 😤 Think your plate can beat it?' in t and '#RateMyPlate' in t and 'Reckon' not in t and 'mate' not in t.lower().replace('#ratemyplate', ''), t)
+    check('roast caption: score + verdict, deadpan copy, #RateMyPlate', '/10. “' in t and 'Think yours can beat it?' in t and '😤' not in t and '#RateMyPlate' in t and 'Reckon' not in t and 'mate' not in t.lower().replace('#ratemyplate', ''), t)
     errs += serrs; ctx.close()
     ctx, serrs = share_ctx(user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1')
     pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
@@ -353,19 +354,19 @@ with sync_playwright() as p:
     ctx, serrs = share_ctx()
     pg = ctx.new_page(); dialogs = []; pg.on('dialog', lambda d: (dialogs.append(d.message), d.dismiss()))
     pg.goto(BASE + '?challenge=roast&s=4'); pg.wait_for_load_state('networkidle')
-    check('challenge link: roast tab, banner "Your friend scored 4/10", no teaser', pg.get_attribute('#tab-roast', 'aria-selected') == 'true' and 'Your friend scored 4/10 with Chef Gerardo' in pg.inner_text('#challengeBanner') and not pg.is_visible('#teaser'), pg.inner_text('#challengeBanner'))
+    check('challenge link: roast tab, banner "Your friend got 4/10", no teaser', pg.get_attribute('#tab-roast', 'aria-selected') == 'true' and 'Your friend got 4/10 from Chef Gerardo' in pg.inner_text('#challengeBanner') and not pg.is_visible('#teaser'), pg.inner_text('#challengeBanner'))
     check('challenge link: query replaced with #roast (reload won’t repeat it)', pg.evaluate('location.search') == '' and pg.evaluate('location.hash') == '#roast', pg.url)
     pg.screenshot(path=str(SHOTS / 'qw3-challenge-banner.png'))
     pg.click('[data-sample=beans]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(800)
     score = int(pg.evaluate("document.querySelector('#panel .score span').firstChild.textContent"))
     line = pg.inner_text('#panel .challenge-line')
-    want = f'You beat your friend: {score} vs 4' if score > 4 else f'Your friend wins this round: 4 vs {score}' if score < 4 else 'Dead even'
+    want = f'You beat your friend. {score} vs 4.' if score > 4 else f'Your friend wins. 4 vs {score}.' if score < 4 else 'Tie.'
     check('challenge answered: beat/lose line in the panel', want in line and not pg.is_visible('#challengeBanner'), line)
     pg.screenshot(path=str(SHOTS / 'qw3-challenge-result.png'), full_page=True)
     with pg.expect_download() as d: pg.evaluate("() => { const f = window.__shareMode; window.__shareMode = 'NotAllowedError'; document.querySelector('#shareBtn').click(); }")
     d.value.save_as(SHOTS / 'qw3-card-challenge-sticker.png')
     from PIL import Image
-    with Image.open(SHOTS / 'qw3-card-challenge-sticker.png') as im: px = im.convert('RGB').getpixel((min(1080 - 160, 1080 // 2 + 380), 230))
+    with Image.open(SHOTS / 'qw3-card-challenge-sticker.png') as im: px = im.convert('RGB').getpixel((60, 206))
     check('challenge sticker drawn on the roast card', (score > 4 and px[0] > 230 and px[1] > 180 and px[2] < 140) or (score <= 4 and min(px) > 220), str(px))
     pg.evaluate("window.__shareMode = 'ok'; window.__shares = []"); pg.click('#challengeBtn'); pg.wait_for_function("() => window.__shares.length === 1")
     sh = pg.evaluate('window.__shares[0]')
@@ -374,8 +375,8 @@ with sync_playwright() as p:
     check('card caption carries the challenge link', f'?challenge=roast&s={score}' in pg.evaluate('window.__shares[0].text'))
     pg.reload(); pg.wait_for_load_state('networkidle')
     check('reload: no challenge banner', not pg.is_visible('#challengeBanner'))
-    for q, ok in (('?challenge=menu&p=189', 'priced at $189'), ('?challenge=fridge', 'fridge made tonight’s special'), ('?challenge=roast&s=99', 'scored 10/10'),
-                  ('?challenge=roast&s=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E', 'got roasted by Chef Gerardo'), ('?challenge=%3Cscript%3E', None)):
+    for q, ok in (('?challenge=menu&p=189', 'dinner: $189'), ('?challenge=fridge', 'fridge made dinner'), ('?challenge=roast&s=99', 'got 10/10'),
+                  ('?challenge=roast&s=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E', 'got judged by Chef Gerardo'), ('?challenge=%3Cscript%3E', None)):
         pg.goto(BASE + q); pg.wait_for_load_state('networkidle')
         txt = pg.inner_text('#challengeBanner') if pg.is_visible('#challengeBanner') else None
         check(f'challenge param {q[:40]} → {"banner: " + ok if ok else "ignored"}', (ok in txt if ok else txt is None) and not pg.query_selector('#challengeBanner img, #challengeBanner script'), str(txt))
@@ -413,7 +414,7 @@ with sync_playwright() as p:
     ctx.add_init_script(SHARE_MOCK)
     pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
     line0 = pg.inner_text('#dailyLine')
-    check('home: "Plate of the day #N: theme" line, no streak yet', line0.startswith('🍽️ Plate of the day #') and ':' in line0 and 'streak' not in line0, line0)
+    check('home: "Plate of the day #N: theme" line, no streak yet', line0.startswith('Plate of the day #') and ':' in line0 and 'streak' not in line0, line0)
     pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(600)
     check('first result starts a 1-day streak', '🔥 1-day streak' in pg.inner_text('#dailyLine'), pg.inner_text('#dailyLine'))
     pg.click('#shareBtn'); pg.wait_for_function("() => window.__shares.length === 1")
@@ -424,7 +425,7 @@ with sync_playwright() as p:
         localStorage.setItem('snootfood.streak.v1', JSON.stringify({ last: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, count: 2, freezes: 1, freezeWeek: '' })); }''')
     pg.reload(); pg.wait_for_load_state('networkidle')
     pg.click('.modes [data-mode=roast]'); pg.click('[data-sample=beans]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(300)
-    check('day 3: milestone toast "3 days straight! Chef Gerardo is… mildly impressed."', '3 days straight! Chef Gerardo is… mildly impressed.' in pg.inner_text('#toast') and pg.is_visible('#toast') and pg.query_selector('#dailyLine .daily-streak.stamp'), pg.inner_text('#toast'))
+    check('day 3: milestone toast "3 days straight. Chef Gerardo is mildly impressed."', '3 days straight. Chef Gerardo is mildly impressed.' in pg.inner_text('#toast') and pg.is_visible('#toast') and pg.query_selector('#dailyLine .daily-streak.stamp'), pg.inner_text('#toast'))
     pg.evaluate("window.scrollTo(0, 0)"); pg.click('#newBtn'); pg.wait_for_timeout(500)
     check('home shows the 3-day streak', '🔥 3-day streak' in pg.inner_text('#dailyLine'), pg.inner_text('#dailyLine'))
     pg.screenshot(path=str(SHOTS / 'qw6-daily-streak.png'))
@@ -443,7 +444,7 @@ with sync_playwright() as p:
     pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(1600)
     check('…nor after the first result', not pg.is_visible('#installBar'))
     pg.click('#againBtn'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_selector('#installBar:not([hidden])', timeout=4000)
-    check('nudge after the 2nd result: "Keep Chef Gerardo on your home screen…" [Add] [Not now]', 'Keep Chef Gerardo on your home screen for tomorrow’s Plate of the day?' in pg.inner_text('#installBar') and pg.is_visible('#installAdd') and pg.inner_text('#installLater') == 'Not now')
+    check('nudge after the 2nd result: "Put Chef Gerardo on your home screen?" [Add] [Not now]', 'Put Chef Gerardo on your home screen?' in pg.inner_text('#installBar') and pg.is_visible('#installAdd') and pg.inner_text('#installLater') == 'Not now')
     pg.screenshot(path=str(SHOTS / 'qw8-install-nudge.png'))
     pg.click('#installAdd'); pg.wait_for_timeout(300)
     check('[Add] opens the browser install prompt; accepted → never nudges again', pg.evaluate('window.__prompted') == 1 and not pg.is_visible('#installBar') and pg.evaluate("!!localStorage.getItem('snootfood.installed.v1')"))
@@ -465,7 +466,7 @@ with sync_playwright() as p:
     ctx, ierr = inst_ctx(user_agent=IOS); pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
     pg.click('[data-sample=noodles]'); pg.wait_for_selector('#panel:not([hidden])'); pg.wait_for_timeout(500); pg.click('#shareBtn'); pg.wait_for_selector('#installBar:not([hidden])', timeout=4000)
     check('iOS Safari: Share ⬆︎ → “Add to Home Screen” instructions, no [Add] button', 'tap Share ⬆︎, then “Add to Home Screen.”' in pg.inner_text('#installBar') and not pg.is_visible('#installAdd'), pg.inner_text('#installBar'))
-    pg.wait_for_timeout(6500)
+    pg.mouse.move(5, 5); pg.wait_for_timeout(6500)
     check('nudge hides itself after ~6 s', not pg.is_visible('#installBar'))
     ierr_all += ierr; ctx.close()
     ctx, ierr = inst_ctx(); ctx.add_init_script("const _mm = window.matchMedia.bind(window); window.matchMedia = (q) => q.includes('standalone') ? { matches: true, media: q, addEventListener() {}, removeEventListener() {} } : _mm(q);")
@@ -477,6 +478,96 @@ with sync_playwright() as p:
     check('Instagram in-app browser → "open in your browser" hint', pg.is_visible('#inAppHint') and 'Open in browser' in pg.inner_text('#inAppHint'))
     ierr_all += ierr; ctx.close()
     errs += ierr_all
+
+    # ── 14. Redesign (direction C): theme, sound, drumroll reveal, reduced motion, wait, expressions ──
+    AUDIO_SPY = "window.__ac = 0; { const A = window.AudioContext; if (A) window.AudioContext = class extends A { constructor(...a) { super(...a); window.__ac++; } }; }"
+    CONFETTI_SPY = "window.__confetti = 0; new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => { if (n.classList && n.classList.contains('confetti')) window.__confetti++; }))).observe(document, { childList: true, subtree: true });"
+    SEEN = "try { localStorage.setItem('snootfood.seen.v1', '1') } catch (e) {}"
+    def red_ctx(**extra):
+        c = browser.new_context(**{**PHONE, **extra}, accept_downloads=True)
+        for sc in (FORCE_DEMO, SEEN, AUDIO_SPY, CONFETTI_SPY): c.add_init_script(sc)
+        e, _ = instrument(c, 'redesign'); return c, e
+    def until_score(pg, sample, cond, tries=12):
+        pg.click(f'[data-sample={sample}]')
+        for _ in range(tries):
+            pg.wait_for_selector('#result[data-reveal=done]', timeout=8000)
+            sc = int(pg.evaluate("document.querySelector('#panel .score span').firstChild.textContent"))
+            if cond(sc): return sc
+            pg.click('#againBtn')
+        return sc
+
+    # theme: follows the system, toggle wins and is remembered
+    ctx, rerr = red_ctx(color_scheme='dark'); pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    bg = lambda: pg.evaluate("getComputedStyle(document.body).backgroundColor")
+    t0, b0 = pg.evaluate("document.documentElement.dataset.theme"), bg()
+    pg.click('#themeBtn'); t1, b1 = pg.evaluate("document.documentElement.dataset.theme"), bg()
+    pg.reload(); pg.wait_for_load_state('networkidle'); t2 = pg.evaluate("document.documentElement.dataset.theme")
+    check('theme: follows system dark → toggle switches to light → remembered after reload', (t0, t1, t2) == ('dark', 'light', 'light') and b0 == 'rgb(11, 11, 11)' and b1 == 'rgb(255, 255, 255)' and pg.evaluate("localStorage.getItem('snootfood.theme.v1')") == 'light', f'{t0}/{b0} → {t1}/{b1} → {t2}')
+    rerr_all = rerr; ctx.close()
+    ctx, rerr = red_ctx(color_scheme='light'); pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    check('theme: light system → light theme, no stored pick', pg.evaluate("document.documentElement.dataset.theme") == 'light' and pg.evaluate("localStorage.getItem('snootfood.theme.v1')") is None)
+
+    # sound: muted by default (no AudioContext at all), toggle remembered
+    pg.click('.modes [data-mode=roast]'); sc = until_score(pg, 'pie', lambda v: v >= 7); pg.wait_for_timeout(600)
+    check('sound: muted by default, speaker shows off, no AudioContext created through a full reveal', pg.get_attribute('#soundBtn', 'aria-pressed') == 'false' and pg.evaluate('window.__ac') == 0 and pg.evaluate("localStorage.getItem('snootfood.sound.v1')") is None, f"ac={pg.evaluate('window.__ac')} score={sc}")
+    # high score → impressed bounce + confetti
+    check(f'high score ({sc}): confetti + slow-clap / chef’s-kiss chef + aria-live verdict', sc >= 7 and pg.evaluate('window.__confetti') >= 1 and (pg.get_attribute('#panel .result-chef', 'data-react'), pg.get_attribute('#panel .result-chef', 'data-expr')) in (('high', 'slow-clap'), ('top', 'chefs-kiss')) and pg.inner_text('#revealLive').startswith(f'{sc} out of 10.'), f"confetti={pg.evaluate('window.__confetti')} live={pg.inner_text('#revealLive')}")
+    pg.click('#soundBtn')
+    check('sound: toggle on → AudioContext made, choice stored', pg.get_attribute('#soundBtn', 'aria-pressed') == 'true' and pg.evaluate('window.__ac') >= 1 and pg.evaluate("localStorage.getItem('snootfood.sound.v1')") == 'on')
+    pg.reload(); pg.wait_for_load_state('networkidle')
+    check('sound: stays on after reload', pg.get_attribute('#soundBtn', 'aria-pressed') == 'true')
+    pg.click('#soundBtn'); rerr_all += rerr; ctx.close()
+
+    # drumroll timing, tap-to-skip, low score faint + droop
+    ctx, rerr = red_ctx(); pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    pg.click('.modes [data-mode=roast]')
+    pg.evaluate("window.__t = []; new MutationObserver(() => { const r = document.querySelector('#result'); window.__t.push([r.dataset.reveal || '', performance.now()]); }).observe(document.querySelector('#result'), { attributes: true, attributeFilter: ['data-reveal'] });")
+    pg.click('[data-sample=beans]'); pg.wait_for_selector('#result[data-reveal=done]')
+    beat = pg.evaluate("() => { const c = document.querySelector('#panel .result-chef'); return [c.dataset.expr, c.dataset.react]; }")
+    pg.wait_for_timeout(700); after = pg.evaluate("() => { const c = document.querySelector('#panel .result-chef'); return [c.dataset.expr, c.dataset.react]; }")
+    check('reveal: shocked beat as the stamp slams, then the band pose', beat == ['shocked', 'beat'] and after[0] != 'shocked' and after[1] != 'beat', f'{beat} → {after}')
+    tl = pg.evaluate('window.__t'); start = next((t for r, t in tl if r == 'drumroll'), None); end = next((t for r, t in tl if r == 'done'), None)
+    mid = pg.evaluate("() => document.querySelector('#result').className")
+    check('reveal: ~1.2 s drumroll before the stamp slams', start is not None and end is not None and 1100 <= end - start <= 1700, f'{(end or 0) - (start or 0):.0f} ms')
+    pg.evaluate("window.__t = []"); pg.click('#againBtn'); pg.wait_for_selector('#result[data-reveal=drumroll]')
+    pg.wait_for_timeout(150); pg.mouse.click(195, 300)
+    tl = pg.evaluate('window.__t'); start = next((t for r, t in tl if r == 'drumroll'), None); end = next((t for r, t in tl if r == 'done'), None)
+    check('reveal: tap during the drumroll skips straight to the verdict', start is not None and end is not None and end - start < 500, f'{(end or 0) - (start or 0):.0f} ms')
+    pg.click('#newBtn'); sc = until_score(pg, 'beans', lambda v: v <= 4); pg.wait_for_timeout(1000)
+    low = pg.evaluate("() => [document.querySelector('#result').dataset.band, document.querySelector('#panel .result-chef').dataset.react, document.querySelector('#panel .result-chef').dataset.expr, getComputedStyle(document.querySelector('#panel .score')).animationName]")
+    check(f'low score ({sc}): chef → {"faint (0–2)" if sc <= 2 else "disgust (3–4)"}, stamp droops', sc <= 4 and low[0] == ('worst' if sc <= 2 else 'low') and low[1] == low[0] and low[2] == ('faint' if sc <= 2 else 'disgust') and 'droop' in low[3], str(low))
+    pg.screenshot(path=str(SHOTS / 'redesign-low-faint.png'))
+    rerr_all += rerr; ctx.close()
+
+    # reduced motion: instant reveal, no confetti, no CSS animation
+    ctx, rerr = red_ctx(reduced_motion='reduce'); pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    pg.click('.modes [data-mode=roast]')
+    pg.evaluate("window.__t = []; new MutationObserver(() => { const r = document.querySelector('#result'); window.__t.push(r.dataset.reveal || ''); }).observe(document.querySelector('#result'), { attributes: true, attributeFilter: ['data-reveal'] });")
+    sc = until_score(pg, 'pie', lambda v: v >= 7); pg.wait_for_timeout(400)
+    rm = pg.evaluate("() => [getComputedStyle(document.querySelector('#homeChefSlot .chef-body')).animationName, getComputedStyle(document.querySelector('#panel .score')).animationName, window.__confetti, window.__t]")
+    check('reduced motion: no drumroll (instant reveal), no confetti, animations off', 'drumroll' not in rm[3] and rm[2] == 0 and rm[0] == 'none' and rm[1] == 'none' and sc >= 7, str(rm))
+    rmc = pg.evaluate("() => { const c = document.querySelector('#panel .result-chef'); return [c.dataset.expr, getComputedStyle(c.querySelector('.chef-body')).animationName]; }")
+    check('reduced motion: chef goes straight to the final pose (no shocked beat, no animation)', rmc[0] in ('slow-clap', 'chefs-kiss') and rmc[1] == 'none', str(rmc))
+    rerr_all += rerr; ctx.close()
+
+    # entertaining wait: a real-AI run with the relay answering after ~9 s (mocked in the page, nothing leaves)
+    SLOW = """window.__calls = 0; { const f = window.fetch; window.fetch = (u, o) => { if (String(u).includes('script.google')) { window.__calls++; const body = JSON.stringify({ ok: true, model: 'gemini-flash-latest', data: { candidates: [{ content: { parts: [{ text: JSON.stringify({ isFood: true, score: 6, headline: 'The crust is trying.', compliment: 'Even bake.', fix: 'Ketchup on the side.' }) }] }, finishReason: 'STOP' }] } });
+        return new Promise((res) => setTimeout(() => res(new Response(body, { status: 200, headers: { 'content-type': 'application/json' } })), 9000)); } return f(u, o); }; }"""
+    ctx = browser.new_context(**PHONE); ctx.add_init_script(AGE_OK); ctx.add_init_script(SEEN); ctx.add_init_script(SLOW); werr, _ = instrument(ctx, 'wait')
+    pg = ctx.new_page(); pg.goto(BASE); pg.wait_for_load_state('networkidle')
+    pg.click('.modes [data-mode=roast]'); upload_sample(pg, 'pie'); pg.wait_for_selector('#loading:not([hidden])')
+    lines, labels = [], []
+    for _ in range(17):
+        lines.append(pg.inner_text('#waitLine')); labels.append(pg.inner_text('#waitLabel')); pg.wait_for_timeout(500)
+    distinct = [l for i, l in enumerate(lines) if i == 0 or l != lines[i - 1]]
+    pcs = [int(x.split(':')[-1].strip().rstrip('%').split('%')[0]) for x in labels if '%' in x]
+    check('wait: chef visible + judging, title says what he is doing', pg.is_visible('#waitChefSlot') and pg.get_attribute('#waitChefSlot .chef-slot', 'data-expr') == 'judging' and 'judging your plate' in pg.inner_text('#waitTitle'))
+    check('wait: lines rotate about every 2.5 s with no repeats', 3 <= len(distinct) <= 5 and len(set(distinct)) == len(distinct), ' | '.join(distinct))
+    check('wait: gag progress bar climbs ("Counting things: 63%")', len(pcs) > 10 and pcs == sorted(pcs) and pcs[-1] - pcs[0] >= 30 and ': ' in labels[-1], f'{labels[0]} → {labels[-1]}')
+    pg.wait_for_selector('#result[data-reveal=done]', timeout=15000)
+    check('wait → reveal: one call, verdict shown', pg.evaluate('window.__calls') == 1 and 'The crust is trying.' in pg.inner_text('#panel h2'))
+    errs += werr; ctx.close()
+    errs += rerr_all
 
     check('no console errors / page errors', not errs, ' | '.join(errs)[:500])
     browser.close()

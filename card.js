@@ -1,10 +1,13 @@
-// Renders the shareable image card on a <canvas>. Portrait 1080×1350 (feed/WhatsApp) or 1080×1920 (Stories).
+// Renders the shareable image card on a <canvas>, in the camera-first look: the photo full-bleed on top,
+// the yellow stamp, the black verdict band, Chef Gerardo in the corner, short lines on a dark sheet.
+// Portrait 1080×1350 (feed/WhatsApp) or 1080×1920 (Stories).
 import { APP } from './config.js';
+import { artFor, exprForScore, stampLine } from './chef.js';
 
-const SERIF = '"Playfair Display", Georgia, "Times New Roman", serif';
-const HAND = 'Caveat, "Segoe Print", "Bradley Hand", cursive';
-let chefImg;
-const chefArt = {};   // Chef Gerardo mood art per mode, loaded once
+const FONT = 'InterT, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+const F = (w, s) => `${w} ${s}px ${FONT}`;
+const C = { sheet: '#0b0b0b', ink: '#ffffff', accent: '#ffe600', hot: '#ff3d2e', black: '#0f0f0f', soft: '#e9e9e9' };
+const chefArt = {};   // expression → Image, loaded once
 
 async function loadArt(base) {
   for (const ext of ['.webp', '.png']) {   // WebP with alpha, PNG fallback
@@ -15,28 +18,10 @@ async function loadArt(base) {
   return null;
 }
 
-export async function prepareCardAssets(mode) {
-  const fonts = ['600 40px "Playfair Display"', '800 40px "Playfair Display"', 'italic 500 40px "Playfair Display"', '600 40px Caveat'];
-  await Promise.all(fonts.map((f) => document.fonts.load(f).catch(() => null)));
-  if (!chefImg) {
-    chefImg = new Image();
-    chefImg.src = 'chef.svg';
-    await chefImg.decode().catch(() => null);
-  }
-  const modes = mode ? [mode] : Object.keys(APP.chefArt || {});
-  await Promise.all(modes.map(async (m) => { if (!chefArt[m] && APP.chefArt?.[m]) chefArt[m] = await loadArt(APP.chefArt[m].file); }));
-}
-
-// Draws the mode's Chef Gerardo standing at the lower-left of the photo, a little in front of it.
-function drawChef(ctx, mode, photoLeft, bottomY, h, overlap = 0.38) {
-  const img = chefArt[mode];
-  if (!img) return;
-  const w = h * img.naturalWidth / img.naturalHeight;
-  const x = Math.max(40, photoLeft - w * (1 - overlap));
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 10;
-  ctx.drawImage(img, x, bottomY - h, w, h);
-  ctx.restore();
+export async function prepareCardAssets(expr) {
+  await Promise.all(['900 40px InterT', '800 40px InterT', '700 40px InterT', '600 40px InterT'].map((f) => document.fonts.load(f).catch(() => null)));
+  const list = [...new Set(['judging', expr || 'judging'])];
+  await Promise.all(list.map(async (e) => { if (!chefArt[e]) chefArt[e] = await loadArt(artFor(e)); }));
 }
 
 function wrap(ctx, text, maxW) {
@@ -53,14 +38,14 @@ function wrap(ctx, text, maxW) {
 }
 
 // Shrinks the font until the text fits in maxLines; ellipsises as a last resort.
-function fit(ctx, text, fontFor, maxW, maxLines, start, min) {
+function fit(ctx, text, weight, maxW, maxLines, start, min, lh = 1.18) {
   let size = start, lines;
   for (; size >= min; size -= 2) {
-    ctx.font = fontFor(size);
+    ctx.font = F(weight, size);
     lines = wrap(ctx, text, maxW);
-    if (lines.length <= maxLines) return { size, lines, lh: size * 1.25 };
+    if (lines.length <= maxLines) return { size, lines, lh: size * lh, weight };
   }
-  size = min; ctx.font = fontFor(size);
+  size = min; ctx.font = F(weight, size);
   lines = wrap(ctx, text, maxW);
   if (lines.length > maxLines) {
     lines = lines.slice(0, maxLines);
@@ -68,15 +53,7 @@ function fit(ctx, text, fontFor, maxW, maxLines, start, min) {
     while (ctx.measureText(last + '…').width > maxW && last.includes(' ')) last = last.slice(0, last.lastIndexOf(' '));
     lines[maxLines - 1] = last + '…';
   }
-  return { size, lines, lh: size * 1.25 };
-}
-
-function drawLines(ctx, block, fontFor, x, y, align = 'center') {
-  ctx.font = fontFor(block.size);
-  ctx.textAlign = align;
-  ctx.textBaseline = 'top';
-  block.lines.forEach((l, i) => ctx.fillText(l, x, y + i * block.lh));
-  return y + block.lines.length * block.lh;
+  return { size, lines, lh: size * lh, weight };
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -89,16 +66,6 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function archPath(ctx, x, y, w, h) {
-  const r = w / 2;
-  ctx.beginPath();
-  ctx.moveTo(x, y + h);
-  ctx.lineTo(x, y + r);
-  ctx.arc(x + r, y + r, r, Math.PI, 0);
-  ctx.lineTo(x + w, y + h);
-  ctx.closePath();
-}
-
 function drawCover(ctx, img, x, y, w, h) {
   const iw = img.width || img.naturalWidth, ih = img.height || img.naturalHeight;
   const s = Math.max(w / iw, h / ih);
@@ -106,11 +73,13 @@ function drawCover(ctx, img, x, y, w, h) {
   ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
 }
 
-function grain(ctx, W, H, alpha, colour = '0,0,0', count = 6000) {
-  let seed = 42;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  ctx.fillStyle = `rgba(${colour},${alpha})`;
-  for (let i = 0; i < count; i++) ctx.fillRect(rnd() * W, rnd() * H, 1.6, 1.6);
+function pill(ctx, text, x, y, { font = F(800, 30), bg = 'rgba(0,0,0,.66)', fg = '#fff', h = 58, align = 'left' } = {}) {
+  ctx.font = font;
+  const w = ctx.measureText(text).width + 40;
+  const left = align === 'right' ? x - w : x;
+  roundRect(ctx, left, y, w, h, h / 2); ctx.fillStyle = bg; ctx.fill();
+  ctx.fillStyle = fg; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(text, left + 20, y + h / 2 + 1);
+  return w;
 }
 
 // Layout (QW4). Story cards keep the bottom 360 px (y ≥ 1560) as plain background: that's where Instagram/TikTok
@@ -119,265 +88,189 @@ const FOOTER_H = 112;                                    // three watermark line
 const footerY = (H, story) => story ? H - 360 - FOOTER_H - 8 : H - 164;
 export const contentBottom = (H, story) => footerY(H, story) - 20;
 export const STORY_SAFE_Y = 1560;
+// Where the challenge sticker sits (tests sample its background colour here).
+export const STICKER = { x: 48, y: 196, h: 116 };
 
-function footer(ctx, W, H, { ink, sub, accent }, opts = {}) {
+function footer(ctx, W, H, opts = {}) {
   const y = footerY(H, opts.story);
   const url = APP.shortUrl + (APP.isTest ? '  ·  TEST' : '');
-  const tag = `#ChefGerardo  ·  Get roasted →`;
-  ctx.font = `800 34px ${SERIF}`; const w1 = ctx.measureText(APP.name).width;
-  ctx.font = `600 30px ${SERIF}`; const w2 = ctx.measureText(url).width;
-  ctx.font = `700 24px ${SERIF}`; const w3 = ctx.measureText(tag).width;
+  const tag = '#ChefGerardo  ·  Get judged →';
+  ctx.font = F(900, 36); const w1 = ctx.measureText(APP.name).width;
+  ctx.font = F(700, 28); const w2 = ctx.measureText(url).width;
+  ctx.font = F(800, 26); const w3 = ctx.measureText(tag).width;
   const x = W / 2 - (84 + Math.max(w1, w2, w3)) / 2;
-  if (chefImg?.complete) ctx.drawImage(chefImg, x, y + 8, 66, 79);
+  const face = chefArt.judging;
+  if (face) { const k = Math.min(72 / face.naturalWidth, 96 / face.naturalHeight); ctx.drawImage(face, x + (72 - face.naturalWidth * k) / 2, y + 2 + (96 - face.naturalHeight * k), face.naturalWidth * k, face.naturalHeight * k); }
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillStyle = ink; ctx.font = `800 34px ${SERIF}`; ctx.fillText(APP.name, x + 84, y);
-  ctx.fillStyle = sub; ctx.font = `600 30px ${SERIF}`; ctx.fillText(url, x + 84, y + 42);
-  ctx.fillStyle = accent || ink; ctx.font = `700 24px ${SERIF}`; ctx.fillText(tag, x + 84, y + 82);
+  ctx.fillStyle = C.ink; ctx.font = F(900, 36); ctx.fillText(APP.name, x + 84, y - 2);
+  ctx.fillStyle = C.soft; ctx.font = F(700, 28); ctx.fillText(url, x + 84, y + 42);
+  ctx.fillStyle = C.accent; ctx.font = F(800, 26); ctx.fillText(tag, x + 84, y + 80);
 }
 
-// "Plate of the day #12 · 🔥3" under the eyebrow (QW6). Returns the extra height used.
-function dailyLine(ctx, W, y, colour, opts) {
-  const d = opts.daily;
-  if (!d) return 0;
-  ctx.save(); ctx.fillStyle = colour; ctx.font = `600 23px ${SERIF}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillText(`Plate of the day #${d.n}${d.streak ? '  ·  🔥' + d.streak : ''}`, W / 2, y);
-  ctx.restore();
-  return 30;
-}
-
-// Honest label when the card is a demo take of the user's own photo (not a real read).
-function demoTag(ctx, W, colour, bg) {
-  ctx.save(); ctx.font = `800 20px ${SERIF}`;
-  const t = 'DEMO TAKE', w = ctx.measureText(t).width + 30;
-  roundRect(ctx, W - 64 - w, 62, w, 34, 17); ctx.fillStyle = bg; ctx.fill();
-  ctx.fillStyle = colour; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, W - 64 - w / 2, 80);
-  ctx.restore();
-}
-
-function ornament(ctx, cx, y, w, colour) {
-  ctx.strokeStyle = colour; ctx.fillStyle = colour; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(cx - w / 2, y); ctx.lineTo(cx - 14, y); ctx.moveTo(cx + 14, y); ctx.lineTo(cx + w / 2, y); ctx.stroke();
-  ctx.save(); ctx.translate(cx, y); ctx.rotate(Math.PI / 4); ctx.fillRect(-6, -6, 12, 12); ctx.restore();
-}
-
-function spaced(ctx, text, x, y, spacing) {
-  // Letter-spaced centred text (canvas letterSpacing isn't everywhere yet).
-  const chars = [...text];
-  const total = chars.reduce((s, c) => s + ctx.measureText(c).width, 0) + spacing * (chars.length - 1);
-  let cx = x - total / 2;
-  ctx.textAlign = 'left';
-  for (const c of chars) { ctx.fillText(c, cx, y); cx += ctx.measureText(c).width + spacing; }
-}
-
-// ───────────── Fancy Menu ─────────────
-function menuCard(ctx, W, H, r, photo, opts = {}) {
-  const g = ctx.createRadialGradient(W / 2, H * 0.4, 100, W / 2, H / 2, H * 0.8);
-  g.addColorStop(0, '#fbf6ea'); g.addColorStop(1, '#e8dcc2');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  grain(ctx, W, H, 0.05);
-  ctx.strokeStyle = '#b8913a'; ctx.lineWidth = 4; ctx.strokeRect(34, 34, W - 68, H - 68);
-  ctx.lineWidth = 1.5; ctx.strokeRect(48, 48, W - 96, H - 96);
-
-  ctx.fillStyle = '#2a1f1a'; ctx.textBaseline = 'top';
-  ctx.font = `600 30px ${SERIF}`;
-  spaced(ctx, APP.restaurant.toUpperCase(), W / 2, 92, 10);
-  ornament(ctx, W / 2, 146, 300, '#b8913a');
-  ctx.font = `italic 500 28px ${SERIF}`; ctx.fillStyle = '#6b5446'; ctx.textAlign = 'center';
-  ctx.fillText('On the menu tonight', W / 2, 162);
-  const extra = dailyLine(ctx, W, 200, '#8a6d3b', opts);
-
-  const tw = W - 200;
-  const name = fit(ctx, r.dishName, (s) => `italic 500 ${s}px ${SERIF}`, tw, 3, 74, 44);
-  const desc = fit(ctx, r.description, (s) => `500 ${s}px ${SERIF}`, tw, 4, 34, 26);
-  const notes = fit(ctx, '“' + r.chefNotes + '”', (s) => `italic 500 ${s}px ${SERIF}`, tw - 40, 3, 28, 22);
-  const pair = fit(ctx, 'Pair it with: ' + r.pairing, (s) => `600 ${s}px ${SERIF}`, tw, 2, 24, 20);
-  const textH = name.lines.length * name.lh + 22 + desc.lines.length * desc.lh + 30 + 76 + 26 + 34 + notes.lines.length * notes.lh + 18 + pair.lines.length * pair.lh;
-  const top = 222 + extra, bottom = contentBottom(H, opts.story);
-  const photoH = Math.max(280, Math.min(H > 1500 ? 900 : 560, bottom - top - textH - 60));
-  const photoW = Math.min(W - 240, photoH * 1.05);
-  const px = (W - photoW) / 2, py = top;
-
-  ctx.save(); archPath(ctx, px, py, photoW, photoH); ctx.clip(); drawCover(ctx, photo, px, py, photoW, photoH); ctx.restore();
-  ctx.strokeStyle = '#b8913a'; ctx.lineWidth = 6; archPath(ctx, px - 10, py - 10, photoW + 20, photoH + 20); ctx.stroke();
-  drawChef(ctx, 'menu', px, py + photoH + 12, H > 1500 ? 330 : 250, 0.24);
-
-  let y = py + photoH + Math.max(30, (bottom - top - photoH - textH) / 2.2);
-  ctx.fillStyle = '#2a1f1a';
-  y = drawLines(ctx, name, (s) => `italic 500 ${s}px ${SERIF}`, W / 2, y) + 22;
-  ctx.fillStyle = '#4a3b33';
-  y = drawLines(ctx, desc, (s) => `500 ${s}px ${SERIF}`, W / 2, y) + 30;
-
-  // Dotted leader + price
-  ctx.font = `800 58px ${SERIF}`; ctx.textAlign = 'center';
-  const pw = ctx.measureText(r.price).width;
-  ctx.fillStyle = '#8c1c13';
-  ctx.fillText(r.price, W / 2, y);
-  ctx.fillStyle = '#b8913a';
-  for (let x = 110; x < W / 2 - pw / 2 - 24; x += 18) ctx.fillRect(x, y + 36, 5, 5);
-  for (let x = W / 2 + pw / 2 + 24; x < W - 110; x += 18) ctx.fillRect(x, y + 36, 5, 5);
-  y += 76 + 26;
-
-  ctx.fillStyle = '#8a6d3b'; ctx.font = `600 22px ${SERIF}`;
-  spaced(ctx, 'CHEF’S NOTES', W / 2, y, 6); y += 34;
-  ctx.fillStyle = '#4a3b33';
-  y = drawLines(ctx, notes, (s) => `italic 500 ${s}px ${SERIF}`, W / 2, y) + 18;
-  ctx.fillStyle = '#6b5446';
-  drawLines(ctx, pair, (s) => `600 ${s}px ${SERIF}`, W / 2, y);
-  footer(ctx, W, H, { ink: '#2a1f1a', sub: '#7a6656', accent: '#8c1c13' }, opts);
-  if (opts.demo) demoTag(ctx, W, '#fbf6ea', '#8a6d3b');
-}
-
-// ───────────── Chef Roast ─────────────
-function roastCard(ctx, W, H, r, photo, opts = {}) {
-  ctx.fillStyle = '#16100e'; ctx.fillRect(0, 0, W, H);
-  const g = ctx.createRadialGradient(W / 2, H * 0.3, 50, W / 2, H * 0.3, H * 0.75);
-  g.addColorStop(0, 'rgba(200,40,30,.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  grain(ctx, W, H, 0.06, '255,255,255', 4000);
-
-  ctx.fillStyle = '#ff5a3c'; ctx.textBaseline = 'top'; ctx.font = `800 34px ${SERIF}`;
-  spaced(ctx, 'CHEF ROAST', W / 2, 70, 12);
-  ctx.fillStyle = '#f3e9dc'; ctx.font = `600 40px ${HAND}`; ctx.textAlign = 'center';
-  ctx.fillText('judged by ' + APP.chef, W / 2, 114);
-  const extra = dailyLine(ctx, W, 166, '#b9a99a', opts);
-
-  const tw = W - 180;
-  const head = fit(ctx, r.headline, (s) => `800 ${s}px ${SERIF}`, tw, 2, 66, 42);
-  const roast = fit(ctx, r.roast, (s) => `italic 500 ${s}px ${SERIF}`, tw - 40, 6, 36, 26);
-  const comp = fit(ctx, '✓ ' + r.compliment, (s) => `600 ${s}px ${SERIF}`, tw, 2, 26, 20);
-  const fix = fit(ctx, 'Pro tip: ' + r.fix, (s) => `600 ${s}px ${SERIF}`, tw, 2, 26, 20);
-  const textH = head.lines.length * head.lh + 26 + roast.lines.length * roast.lh + 26 + (comp.lines.length * comp.lh) + 10 + fix.lines.length * fix.lh;
-  const top = 190 + extra, bottom = contentBottom(H, opts.story);
-  const photoH = Math.max(300, Math.min(H > 1500 ? 860 : 500, bottom - top - textH - 110));
-  const photoW = Math.min(W - 260, photoH * 1.2);
-
-  // Polaroid, slightly askew
-  ctx.save();
-  ctx.translate(W / 2, top + photoH / 2 + 10); ctx.rotate(-0.03);
-  ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 16;
-  ctx.fillStyle = '#f7f2ea'; ctx.fillRect(-photoW / 2 - 18, -photoH / 2 - 18, photoW + 36, photoH + 36);
-  ctx.shadowColor = 'transparent';
-  drawCover(ctx, photo, -photoW / 2, -photoH / 2, photoW, photoH);
-  ctx.restore();
-
-  // Score stamp
-  const sx = W / 2 + photoW / 2 - 20, sy = top + photoH - 50;
-  ctx.save(); ctx.translate(sx, sy); ctx.rotate(0.18);
-  ctx.fillStyle = '#c8102e'; ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#f7f2ea'; ctx.lineWidth = 5; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.arc(0, 0, 85, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `800 84px ${SERIF}`; ctx.fillText(String(r.score), r.score === 10 ? -22 : -14, -6);
-  ctx.font = `800 30px ${SERIF}`; ctx.fillText('/10', r.score === 10 ? 52 : 44, 26);
-  ctx.restore();
-  drawChef(ctx, 'roast', W / 2 - photoW / 2 - 18, top + photoH + 36, H > 1500 ? 400 : 310);
-  if (opts.challenge) challengeSticker(ctx, Math.min(W - 160, sx), Math.max(150, top + 40), opts.challenge);
-
-  let y = top + photoH + 80 + Math.max(0, (bottom - top - photoH - textH - 80) / 2.4);
-  ctx.fillStyle = '#ffffff';
-  y = drawLines(ctx, head, (s) => `800 ${s}px ${SERIF}`, W / 2, y) + 26;
-  ctx.fillStyle = '#ff5a3c'; ctx.font = `800 120px ${SERIF}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillText('“', 56, y - 34);
-  ctx.fillStyle = '#efe4d6';
-  y = drawLines(ctx, roast, (s) => `italic 500 ${s}px ${SERIF}`, W / 2, y) + 26;
-  ctx.fillStyle = '#9fd49a';
-  y = drawLines(ctx, comp, (s) => `600 ${s}px ${SERIF}`, W / 2, y) + 10;
-  ctx.fillStyle = '#f2c46d';
-  drawLines(ctx, fix, (s) => `600 ${s}px ${SERIF}`, W / 2, y);
-  footer(ctx, W, H, { ink: '#ffffff', sub: '#d8c9ba', accent: '#ff7a5c' }, opts);
-  if (opts.demo) demoTag(ctx, W, '#16100e', '#f3e9dc');
-}
-
-// "You beat your friend 7 vs 4" sticker for challenge answers (QW3)
-function challengeSticker(ctx, cx, cy, { mine, theirs }) {
+// "You beat your friend · 7 vs 4" sticker for challenge answers (QW3). Yellow when you win, white otherwise.
+function challengeSticker(ctx, { mine, theirs }) {
   const won = mine > theirs, tie = mine === theirs;
-  const top = won ? 'YOU BEAT YOUR FRIEND' : tie ? 'DEAD EVEN WITH YOUR FRIEND' : 'YOUR FRIEND WINS';
+  const top = won ? 'YOU BEAT YOUR FRIEND' : tie ? 'TIE WITH YOUR FRIEND' : 'YOUR FRIEND WINS';
   const big = won || tie ? `${mine} vs ${theirs}` : `${theirs} vs ${mine}`;
-  ctx.save(); ctx.translate(cx, cy); ctx.rotate(0.07);
-  ctx.font = `800 22px ${SERIF}`; const w = Math.max(230, ctx.measureText(top).width + 44);
+  ctx.save();
+  ctx.font = F(900, 24); const w = Math.max(300, ctx.measureText(top).width + 48);
   ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 8;
-  roundRect(ctx, -w / 2, -56, w, 112, 18); ctx.fillStyle = won ? '#ffcf5a' : '#f7f2ea'; ctx.fill();
+  roundRect(ctx, STICKER.x, STICKER.y, w, STICKER.h, 20); ctx.fillStyle = won ? C.accent : '#ffffff'; ctx.fill();
   ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = won ? '#2a1f1a' : '#c8102e'; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); roundRect(ctx, -w / 2 + 8, -48, w - 16, 96, 12); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = '#2a1f1a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(top, 0, -22);
-  ctx.font = `800 46px ${SERIF}`; ctx.fillStyle = won ? '#8c1c13' : '#2a1f1a'; ctx.fillText(big, 0, 20);
+  ctx.fillStyle = C.black; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(top, STICKER.x + w / 2, STICKER.y + 34);
+  ctx.font = F(900, 50); ctx.fillStyle = won ? C.black : C.hot; ctx.fillText(big, STICKER.x + w / 2, STICKER.y + 80);
   ctx.restore();
 }
 
-// ───────────── Fridge Chef (chalkboard special) ─────────────
-function fridgeCard(ctx, W, H, r, photo, opts = {}) {
-  ctx.fillStyle = '#5b3a22'; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#1e352b'; ctx.fillRect(30, 30, W - 60, H - 60);
-  for (let i = 0; i < 9; i++) {
-    const gx = (i * 397) % W, gy = (i * 613) % H;
-    const sm = ctx.createRadialGradient(gx, gy, 10, gx, gy, 320);
-    sm.addColorStop(0, 'rgba(255,255,255,.05)'); sm.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = sm; ctx.fillRect(30, 30, W - 60, H - 60);
+// The yellow stamp circle: "4/10" (score) or the price.
+function stamp(ctx, cx, cy, R, score, price, kind) {
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(-0.17);
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12;
+  ctx.beginPath(); ctx.arc(0, 0, R + 12, 0, Math.PI * 2); ctx.fillStyle = C.black; ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fillStyle = C.accent; ctx.fill();
+  ctx.fillStyle = C.black; ctx.textBaseline = 'alphabetic';
+  if (score != null) {
+    ctx.font = F(900, R * 1.05); const n = String(score), nw = ctx.measureText(n).width;
+    ctx.font = F(900, R * 0.36); const sw = ctx.measureText('/10').width;
+    const x0 = -(nw + sw) / 2;
+    ctx.textAlign = 'left';
+    ctx.font = F(900, R * 1.05); ctx.fillText(n, x0, R * 0.36);
+    ctx.font = F(900, R * 0.36); ctx.fillText('/10', x0 + nw + 2, R * 0.36);
+    if (kind) { ctx.font = F(900, R * 0.17); ctx.textAlign = 'center'; ctx.fillText(kind.toUpperCase(), 0, -R * 0.5); }
+  } else {
+    const t = (String(price || '').match(/\$\s?[\d,.]+[kKmM]?/) || [String(price || '$∞').slice(0, 7)])[0].replace(/\s/g, '');
+    let size = R * 0.62; ctx.font = F(900, size);
+    while (ctx.measureText(t).width > R * 1.6 && size > 30) { size -= 4; ctx.font = F(900, size); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, 0, 4);
   }
-  grain(ctx, W, H, 0.05, '255,255,255', 5000);
-
-  const chalk = '#f4f1e8';
-  ctx.fillStyle = chalk; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.font = `600 76px ${HAND}`; ctx.fillText('Tonight’s Special', W / 2, 62);
-  ctx.font = `italic 500 26px ${SERIF}`; ctx.fillStyle = '#cfe3d4';
-  ctx.fillText(`${APP.restaurant} · straight from your fridge`, W / 2, 146);
-  const extra = dailyLine(ctx, W, 186, '#b9d3c1', opts);
-
-  const tw = W - 180;
-  const name = fit(ctx, r.specialName, (s) => `italic 500 ${s}px ${SERIF}`, tw, 2, 64, 40);
-  const desc = fit(ctx, r.description, (s) => `500 ${s}px ${SERIF}`, tw, 3, 30, 24);
-  const ingr = fit(ctx, 'Made with: ' + r.ingredients.join(' · '), (s) => `600 ${s}px ${HAND}`, tw, 2, 38, 28);
-  const steps = r.steps.slice(0, 3).map((s, i) => fit(ctx, `${i + 1}. ${s}`, (z) => `600 ${z}px ${HAND}`, tw - 40, 2, 38, 28));
-  const note = fit(ctx, '“' + r.note + '”', (s) => `italic 500 ${s}px ${SERIF}`, tw, 2, 26, 20);
-  const stepsH = steps.reduce((s, b) => s + b.lines.length * b.lh + 4, 0);
-  const textH = name.lines.length * name.lh + 18 + desc.lines.length * desc.lh + 20 + ingr.lines.length * ingr.lh + 18 + stepsH + 18 + note.lines.length * note.lh;
-  const top = 222 + extra, bottom = contentBottom(H, opts.story);
-  const photoH = Math.max(280, Math.min(H > 1500 ? 820 : 450, bottom - top - textH - 50));
-  const photoW = Math.min(W - 300, photoH * 1.25);
-  const px = (W - photoW) / 2, py = top;
-
-  ctx.save(); ctx.translate(W / 2, py + photoH / 2); ctx.rotate(0.02);
-  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12;
-  roundRect(ctx, -photoW / 2, -photoH / 2, photoW, photoH, 18); ctx.fillStyle = '#000'; ctx.fill();
-  ctx.shadowColor = 'transparent';
-  ctx.save(); roundRect(ctx, -photoW / 2, -photoH / 2, photoW, photoH, 18); ctx.clip(); drawCover(ctx, photo, -photoW / 2, -photoH / 2, photoW, photoH); ctx.restore();
-  ctx.fillStyle = 'rgba(245,235,200,.8)';
-  ctx.save(); ctx.translate(-photoW / 2 + 14, -photoH / 2 + 10); ctx.rotate(-0.6); ctx.fillRect(-46, -15, 92, 30); ctx.restore();
-  ctx.save(); ctx.translate(photoW / 2 - 14, -photoH / 2 + 10); ctx.rotate(0.6); ctx.fillRect(-46, -15, 92, 30); ctx.restore();
   ctx.restore();
-
-  // Price tag
-  ctx.font = `800 40px ${SERIF}`;
-  const tagW = Math.max(150, ctx.measureText(r.price).width + 50);
-  ctx.save(); ctx.translate(Math.min(px + photoW + 10, W - 56 - tagW / 2), py + photoH - 30); ctx.rotate(-0.12);
-  roundRect(ctx, -tagW / 2, -40, tagW, 80, 40); ctx.fillStyle = '#f2c14e'; ctx.fill();
-  ctx.fillStyle = '#2a1f1a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(r.price, 0, 2);
-  ctx.restore();
-  drawChef(ctx, 'fridge', px, py + photoH + 14, H > 1500 ? 380 : 290);
-
-  let y = py + photoH + Math.max(32, (bottom - top - photoH - textH) / 2.3);
-  ctx.fillStyle = chalk;
-  y = drawLines(ctx, name, (s) => `italic 500 ${s}px ${SERIF}`, W / 2, y) + 18;
-  ctx.fillStyle = '#dfe9e2';
-  y = drawLines(ctx, desc, (s) => `500 ${s}px ${SERIF}`, W / 2, y) + 20;
-  ctx.fillStyle = '#f2c14e';
-  y = drawLines(ctx, ingr, (s) => `600 ${s}px ${HAND}`, W / 2, y) + 18;
-  ctx.fillStyle = chalk;
-  for (const b of steps) y = drawLines(ctx, b, (s) => `600 ${s}px ${HAND}`, W / 2, y) + 4;
-  y += 14;
-  ctx.fillStyle = '#b9d3c1';
-  drawLines(ctx, note, (s) => `italic 500 ${s}px ${SERIF}`, W / 2, y);
-  footer(ctx, W, H, { ink: chalk, sub: '#cfe3d4', accent: '#f2c14e' }, opts);
-  if (opts.demo) demoTag(ctx, W, '#1e352b', '#f4f1e8');
 }
 
-export async function renderCard(mode, result, photo, opts = {}) {
-  await prepareCardAssets(mode);
-  const W = 1080, H = opts.story ? 1920 : 1350;
+// Black verdict band, bottom-aligned at `bottom`. Returns the band's top y.
+function verdictBand(ctx, text, x, bottom, maxW, story) {
+  const b = fit(ctx, text, 900, maxW - 36, 3, story ? 100 : 92, 56, 1.12);
+  const lh = b.size * 1.12, padX = 18;
+  const top = bottom - b.lines.length * lh;
+  ctx.font = F(900, b.size); ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  b.lines.forEach((l, i) => {
+    const y = top + i * lh, w = ctx.measureText(l).width;
+    ctx.fillStyle = C.black; ctx.fillRect(x, y, w + padX * 2, lh + 1);
+    ctx.fillStyle = '#ffffff'; ctx.fillText(l, x + padX, y + lh / 2 + 2);
+  });
+  return top;
+}
+
+function drawChef(ctx, expr, right, bottom, boxW, boxH) {
+  const img = chefArt[expr] || chefArt.judging;
+  if (!img) return;
+  const k = Math.min(boxW / img.naturalWidth, boxH / img.naturalHeight);   // fit the pose into the box
+  const w = img.naturalWidth * k, h = img.naturalHeight * k;
+  ctx.save();
+  ctx.shadowColor = expr === 'chefs-kiss' ? 'rgba(255,214,64,.75)' : 'rgba(0,0,0,.45)'; ctx.shadowBlur = expr === 'chefs-kiss' ? 40 : 26; ctx.shadowOffsetY = expr === 'chefs-kiss' ? 0 : 12;
+  ctx.translate(right, bottom - h); ctx.scale(-1, 1);   // facing into the card, like the app
+  ctx.drawImage(img, 0, 0, w, h);
+  ctx.restore();
+}
+
+// Lays out the sheet's text blocks top-down; shrinks, then drops low-priority blocks until they fit.
+function sheetText(ctx, blocks, x, y, bottom, wNarrow, wFull, narrowUntil) {
+  let scale = 1, laid;
+  const layout = (list) => {
+    let yy = y; const out = [];
+    for (const b of list) {
+      const maxW = yy < narrowUntil ? wNarrow : wFull;
+      if (b.chip) { ctx.font = F(900, Math.round(b.size * scale)); out.push({ ...b, y: yy, s: Math.round(b.size * scale) }); yy += b.size * scale * 1.5 + 18; continue; }
+      const f = fit(ctx, b.text, b.weight, maxW, b.lines, Math.round(b.size * scale), Math.round(b.min * scale), b.lh || 1.22);
+      out.push({ ...b, f, y: yy }); yy += f.lines.length * f.lh + (b.gap ?? 14);
+    }
+    return { out, end: yy };
+  };
+  let list = blocks;
+  for (;;) {
+    laid = layout(list);
+    if (laid.end <= bottom) break;
+    if (scale > 0.8) { scale -= 0.05; continue; }
+    const drop = list.reduce((m, b, i) => (b.prio != null && (m < 0 || b.prio < list[m].prio) ? i : m), -1);
+    if (drop < 0) break;
+    list = list.filter((_, i) => i !== drop); scale = 1;
+  }
+  for (const b of laid.out) {
+    if (b.chip) {
+      ctx.save(); ctx.font = F(900, b.s); const w = ctx.measureText(b.text).width + 32, h = b.s * 1.4;
+      ctx.translate(x, b.y); ctx.rotate(-0.03);
+      roundRect(ctx, 0, 0, w, h, 12); ctx.fillStyle = b.bg || C.hot; ctx.fill();
+      ctx.fillStyle = b.fg || '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(b.text, 16, h / 2 + 2);
+      ctx.restore(); continue;
+    }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    b.f.lines.forEach((l, i) => {
+      const ly = b.y + i * b.f.lh;
+      if (i === 0 && b.label) {
+        ctx.font = F(900, b.f.size); ctx.fillStyle = b.labelColor || C.ink; ctx.fillText(b.label, x, ly);
+        const lw = ctx.measureText(b.label + ' ').width;
+        ctx.font = F(b.weight, b.f.size); ctx.fillStyle = b.color || C.ink; ctx.fillText(l.slice(b.label.length + 1), x + lw, ly);
+      } else { ctx.font = F(b.weight, b.f.size); ctx.fillStyle = b.color || C.ink; ctx.fillText(l, x, ly); }
+    });
+  }
+}
+
+const L = (label, text, o = {}) => ({ label, text: `${label} ${text}`, weight: 700, size: 40, min: 30, lines: 2, ...o });
+
+export async function renderCard(mode, r, photo, opts = {}) {
+  const score = mode === 'menu' || r.score == null || !Number.isFinite(Number(r.score)) ? null : Math.max(0, Math.min(10, Math.round(Number(r.score))));
+  const expr = exprForScore(score);
+  await prepareCardAssets(expr);
+  const W = 1080, H = opts.story ? 1920 : 1350, story = !!opts.story;
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
-  ({ menu: menuCard, roast: roastCard, fridge: fridgeCard })[mode](ctx, W, H, result, photo, opts);
+  const verdict = mode === 'roast' ? r.headline : r.verdict || r.dishName || r.specialName || '';
+
+  // Photo, full-bleed, then the sheet with rounded top corners over its bottom edge.
+  const photoH = story ? 960 : (mode === 'fridge' ? 640 : 680);
+  ctx.fillStyle = C.sheet; ctx.fillRect(0, 0, W, H);
+  drawCover(ctx, photo, 0, 0, W, photoH);
+  ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(0, 0, W, photoH);
+  roundRect(ctx, 0, photoH - 56, W, H - photoH + 56, 56); ctx.fillStyle = C.sheet; ctx.fill();
+
+  // Floating pills
+  pill(ctx, APP.name, 40, 40, { font: F(900, 34), h: 64 });
+  if (opts.demo) pill(ctx, 'DEMO TAKE', W - 40, 44, { bg: C.accent, fg: C.black, align: 'right', font: F(900, 26), h: 54 });
+  const d = opts.daily;
+  if (d) pill(ctx, `Plate of the day #${d.n}${d.streak ? '  ·  🔥' + d.streak : ''}`, 40, 120, { font: F(800, 24), h: 48 });
+  if (opts.challenge) challengeSticker(ctx, opts.challenge);
+
+  stamp(ctx, W - 200, story ? 300 : 270, story ? 150 : 136, score, r.price, mode === 'fridge' && score != null ? 'fridge' : '');
+  drawChef(ctx, expr, W - 6, photoH + (story ? 300 : 250), story ? 420 : 350, story ? 470 : 400);
+  verdictBand(ctx, verdict, 40, photoH - 84, W - 330, story);
+
+  // Sheet text
+  const sx = 52, sy = photoH + 22, bottom = contentBottom(H, story);
+  const narrowUntil = photoH + (story ? 300 : 250) - 10;
+  const blocks = [];
+  if (mode === 'roast') {
+    blocks.push({ chip: true, text: stampLine(score, verdict), size: 46 });
+    if (r.compliment) blocks.push(L('Good:', r.compliment, { prio: 3 }));
+    if (r.fix) blocks.push(L('Fix:', r.fix, { prio: 2 }));
+  } else if (mode === 'menu') {
+    blocks.push({ text: 'ON THE MENU TONIGHT', weight: 900, size: 28, min: 24, lines: 1, color: C.hot, gap: 10 });
+    blocks.push({ text: r.dishName, weight: 900, size: 56, min: 40, lines: 2, lh: 1.08, gap: 16 });
+    if (r.description) blocks.push({ text: r.description, weight: 600, size: 36, min: 28, lines: 2, prio: 1 });
+    blocks.push(L('Price:', r.price, { size: 36, lines: 1, prio: 2 }));
+    if (r.pairing) blocks.push(L('Pair it with:', r.pairing, { size: 36, lines: 1, prio: 0 }));
+  } else {
+    if (score != null) blocks.push({ chip: true, text: stampLine(score, verdict), size: 40 });
+    blocks.push({ text: r.specialName, weight: 900, size: 52, min: 38, lines: 2, lh: 1.08, gap: 14 });
+    blocks.push({ text: 'Made with: ' + r.ingredients.join(' · '), weight: 700, size: 32, min: 26, lines: 2, prio: 2 });
+    r.steps.slice(0, 3).forEach((s, i) => blocks.push({ text: `${i + 1}. ${s}`, weight: 700, size: 34, min: 26, lines: 1, gap: 8, prio: 1 }));
+    blocks.push(L('Price:', r.price, { size: 32, lines: 1, prio: 0 }));
+  }
+  blocks.push({ text: '— ' + APP.chef, weight: 900, size: 36, min: 30, lines: 1, prio: -1, gap: 0 });
+  if (story) blocks.forEach((b) => { b.size = Math.round(b.size * 1.18); if (b.min) b.min = Math.round(b.min * 1.12); if (b.gap != null) b.gap = Math.round(b.gap * 1.3); });
+  sheetText(ctx, blocks, sx, sy, bottom, W - sx - 300, W - sx * 2, narrowUntil);
+  footer(ctx, W, H, opts);
   return canvas;
 }
 

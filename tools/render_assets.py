@@ -18,40 +18,41 @@ def icon_html(size, maskable=False):
 <div style="width:{size*(1-2*pad)}px;height:{size*(1-2*pad)}px;border-radius:50%;background:#f6efe1;box-shadow:0 0 0 {max(2,size//64)}px #c9a24a inset;display:flex;align-items:center;justify-content:center">
 <div style="width:72%;height:86%">{chef.replace('width="200" height="240"','width="100%" height="100%"')}</div></div></div></body></html>"""
 
-# Link preview: sassy Chef Gerardo + a sample plate stamped 4/10 + the pitch. Rendered from the repo's own fonts and art.
+# Link preview (direction C, camera-first): a full-bleed plate, a yellow score stamp, the verdict on black
+# bands, Chef Gerardo (disgusted, as a 4/10 deserves) in the corner. Rendered from the repo's own font and art.
 OG_HTML = """<!doctype html><html><head><meta charset="utf-8"><style>
-@font-face { font-family: P; src: url(fonts/playfair.woff2); font-weight: 400 900; }
-@font-face { font-family: P; src: url(fonts/playfair-italic.woff2); font-style: italic; font-weight: 500; }
-@font-face { font-family: C; src: url(fonts/caveat.woff2); font-weight: 600; }
+@font-face { font-family: T; src: url(fonts/intertight.woff2); font-weight: 600 900; }
 html, body { margin: 0; }
-.og { position: relative; width: 1200px; height: 630px; overflow: hidden; background: radial-gradient(ellipse at 62% 38%, rgba(200,40,30,.45), rgba(0,0,0,0) 62%), #16100e; color: #f3e9dc; font-family: P, Georgia, serif; }
-.chef { position: absolute; left: 18px; bottom: -8px; height: 560px; filter: drop-shadow(0 18px 24px rgba(0,0,0,.5)); z-index: 3; }
-.polaroid { position: absolute; left: 258px; top: 92px; width: 330px; height: 330px; padding: 16px 16px 54px; background: #f7f2ea; transform: rotate(-4deg); box-shadow: 0 24px 50px rgba(0,0,0,.6); }
-.polaroid img { width: 330px; height: 330px; object-fit: cover; display: block; }
-.polaroid figcaption { font: 600 30px/1 C, cursive; color: #2a1f1a; text-align: center; margin-top: 10px; }
-.stamp { position: absolute; left: 492px; top: 246px; width: 170px; height: 170px; border-radius: 50%; background: #c8102e; transform: rotate(12deg); display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 26px rgba(0,0,0,.45); z-index: 4; }
-.stamp::before { content: ''; position: absolute; inset: 13px; border: 4px dashed #f7f2ea; border-radius: 50%; }
-.stamp b { font: 800 82px/1 P; color: #fff; } .stamp small { font: 800 30px/1 P; color: #fff; margin: 34px 0 0 2px; }
-.copy { position: absolute; left: 700px; top: 70px; width: 450px; }
-.eyebrow { font: 800 20px/1 P; letter-spacing: .32em; color: #ff5a3c; margin: 0 0 18px; }
-h1 { font: 800 60px/1.04 P; margin: 0 0 18px; color: #fff; letter-spacing: -.5px; }
-.sub { font: italic 500 26px/1.35 P; color: #efe4d6; margin: 0 0 26px; }
-.modes { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 30px; }
-.modes span { font: 700 17px/1 P; padding: 9px 12px; border-radius: 999px; background: #2c2220; border: 1px solid #5b443a; }
-.brand { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.brand b { font: 800 34px/1 P; } .brand small { flex-basis: 100%; font: 600 20px/1.3 P; color: #d8c9ba; }
-.brand .tag { font: 800 14px/1 P; letter-spacing: .1em; background: #ffcf5a; color: #2a1f1a; padding: 6px 8px; border-radius: 6px; }
+.og { position: relative; width: 1200px; height: 630px; overflow: hidden; background: #0b0b0b; color: #fff; font-family: T, system-ui, sans-serif; }
+.photo { position: absolute; inset: 0 0 0 0; width: 760px; height: 630px; object-fit: cover; }
+.fade { position: absolute; left: 520px; top: 0; width: 260px; height: 630px; background: linear-gradient(90deg, rgba(11,11,11,0), #0b0b0b); }
+.stamp { position: absolute; left: 470px; top: 54px; width: 200px; height: 200px; border-radius: 50%; background: #ffe600; color: #0f0f0f; transform: rotate(-10deg); display: flex; align-items: center; justify-content: center; box-shadow: 0 14px 30px rgba(0,0,0,.45); }
+.stamp b { font: 900 120px/1 T; letter-spacing: -4px; } .stamp small { font: 900 34px/1 T; margin: 58px 0 0 2px; }
+.verdict { position: absolute; left: 44px; bottom: 56px; margin: 0; font: 900 64px/1.18 T; letter-spacing: -1.5px; }
+.verdict span { background: #0f0f0f; color: #fff; padding: 2px 16px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.pill { position: absolute; left: 44px; top: 44px; font: 900 26px/1 T; padding: 12px 18px; border-radius: 999px; background: rgba(0,0,0,.62); }
+.pill i { font-style: normal; margin-left: 10px; font-size: 16px; background: #ffe600; color: #0f0f0f; padding: 4px 8px; border-radius: 6px; vertical-align: 4px; }
+.copy { position: absolute; left: 790px; top: 56px; width: 380px; }
+h1 { font: 900 54px/1.02 T; margin: 0 0 18px; letter-spacing: -1.5px; }
+.sub { font: 700 24px/1.3 T; color: #d9d9d9; margin: 0 0 22px; }
+.modes { display: flex; gap: 10px; }
+.modes span { font: 800 20px/1 T; padding: 11px 16px; border-radius: 999px; background: #222; }
+.modes span:first-child { background: #ffe600; color: #0f0f0f; }
+.url { position: absolute; left: 790px; top: 330px; font: 700 18px/1 T; color: #9a9a9a; }
+.chef { position: absolute; right: 24px; bottom: -4px; height: 270px; transform: scaleX(-1); filter: drop-shadow(0 16px 24px rgba(0,0,0,.6)); }
 </style></head><body><div class="og">
-<figure class="polaroid" style="margin:0"><img src="samples/noodles.jpg" alt=""><figcaption>instant noodles</figcaption></figure>
+<img class="photo" src="samples/beans.jpg" alt=""><div class="fade"></div>
+<div class="pill">Snootfood__TAG__</div>
 <div class="stamp"><b>4</b><small>/10</small></div>
-<img class="chef" src="img/chef-gerardo-chef-roast.png" alt="">
+<p class="verdict"><span>The beans won.</span></p>
 <div class="copy">
-  <p class="eyebrow">CHEF ROAST</p>
-  <h1>Chef Gerardo will roast your dinner.</h1>
-  <p class="sub">Snap any meal. Think your plate can beat a 4/10?</p>
-  <div class="modes"><span>🍽️ Fancy Menu</span><span>🔥 Chef Roast</span><span>🧊 Fridge Chef</span></div>
-  <div class="brand"><b>Snootfood</b>__TAG__<small>__URL__</small></div>
-</div></div></body></html>"""
+  <h1>Show Chef Gerardo what you’re eating.</h1>
+  <p class="sub">Snap it. Get judged. Beat a 4/10.</p>
+  <div class="modes"><span>Roast</span><span>Menu</span><span>Fridge</span></div>
+</div>
+<p class="url">__URL__</p>
+<img class="chef" src="img/chef-disgust.png" alt="">
+</div></body></html>"""
 
 def serve():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
@@ -83,7 +84,7 @@ with sync_playwright() as p:
     base = serve() if targets & {"og", "screenshots"} else None
     if "og" in targets:
         app = app_config()
-        html = OG_HTML.replace("__URL__", app["shortUrl"]).replace("__TAG__", ' <span class="tag">TEST</span>' if app.get("isTest") else "")
+        html = OG_HTML.replace("__URL__", app["shortUrl"]).replace("__TAG__", '<i>TEST</i>' if app.get("isTest") else "")
         (root / "_og.html").write_text(html)
         try:
             pg.set_viewport_size({"width": 1200, "height": 630}); pg.goto(base + "_og.html"); pg.wait_for_load_state("networkidle")
@@ -99,9 +100,9 @@ with sync_playwright() as p:
             ctx = b.new_context(viewport={"width": vp[0], "height": vp[1]}, device_scale_factor=scale, is_mobile=scale > 1, has_touch=scale > 1)
             ctx.add_init_script(FORCE_DEMO)
             sp = ctx.new_page(); sp.goto(base + "#" + mode); sp.wait_for_load_state("networkidle")
-            sp.click(f"[data-sample={sample}]"); sp.wait_for_selector("#panel:not([hidden])"); sp.wait_for_timeout(900)
+            sp.click(f"[data-sample={sample}]"); sp.wait_for_selector("#result[data-reveal=done]"); sp.wait_for_timeout(1400)
             sp.evaluate("document.querySelectorAll('.demo-banner, .demo-tag, #demoPill, .toast').forEach((e) => e.style.display = 'none')")   # store-style shots: no test chrome
-            sp.evaluate("document.querySelector('#photoWrap').scrollIntoView({block: 'start'}); window.scrollBy(0, -70)" if scale > 1 else "window.scrollTo(0, 0)")
+            sp.evaluate("window.scrollTo(0, 0)" if scale > 1 else "window.scrollTo(0, 0)")
             sp.wait_for_timeout(300)
             out = root / "screenshots" / f"{name}.png"
             sp.screenshot(path=str(out))

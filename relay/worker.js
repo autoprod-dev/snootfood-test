@@ -26,23 +26,31 @@ const MAX_TEXT_CHARS = 20000;
 const MAX_OUTPUT_TOKENS = 4096;
 const DAILY_LIMIT_DEFAULT = 100;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const VOICE_RULE = 'House voice (added by the relay, always applies): dry, deadpan and short, like a judgy friend. Any verdict or headline is 2-6 words and names something actually visible or listed. Good and fix lines are 8 words max. No puns, no fake French, no emoji, no exclamation marks.';
+// Appends the house voice to copy-writing requests; fridge scans (inventory prompt) stay as they are.
+export function withVoice(sys) {
+  const parts = sys?.parts || [];
+  const text = parts.map((p) => p?.text || '').join('');
+  if (/inventory assistant/i.test(text) || text.includes('House voice (added by the relay')) return sys;
+  return { parts: [...parts, { text: VOICE_RULE }] };
+}
 const ALLOWED_BODY_KEYS = ['contents', 'systemInstruction', 'generationConfig', 'safetySettings'];
 const ALLOWED_GEN_KEYS = ['responseMimeType', 'responseSchema', 'temperature', 'maxOutputTokens', 'topP', 'topK'];
 
 const MESSAGES = {
-  bad_origin: 'This kitchen only takes orders from the Snootfood test site.',
+  bad_origin: 'This kitchen only serves the Snootfood test site.',
   not_found: 'Nothing on the menu here.',
   method: 'This kitchen only takes POST orders.',
   bad_model: 'That model isn’t on the menu here.',
-  too_big: 'That photo’s too big to send (2 MB max). Try a smaller one.',
-  bad_request: 'That request looked a little scrambled. Try again.',
-  rate_minute: 'Whoa, slow down, chef! Too many requests in a minute. Try again shortly.',
-  rate_day: 'That’s the daily limit for real photo reading. Come back tomorrow, or use a demo result.',
-  upstream_quota: 'The kitchen’s slammed (the AI’s quota is used up for now). Try again later, or use a demo result.',
-  upstream_auth: 'The kitchen’s AI key isn’t working right now. Try a demo result for now.',
-  upstream_blocked: 'Chef’s passing on that one. Try a different photo.',
-  upstream_error: 'The AI is having a moment. Try again in a sec.',
-  not_configured: 'Real photo reading isn’t set up yet. Try a demo result.',
+  too_big: 'Photo’s too big (2 MB max). Try a smaller one.',
+  bad_request: 'Scrambled request. Try again.',
+  rate_minute: 'Too many in a minute. Try again shortly.',
+  rate_day: 'Real reads hit the daily limit. Back tomorrow.',
+  upstream_quota: 'Busy kitchen. Try again later.',
+  upstream_auth: 'Kitchen key isn’t working. Demo for now.',
+  upstream_blocked: 'Chef passed on that one. Different photo.',
+  upstream_error: 'The AI is having a moment. Try again.',
+  not_configured: 'Photo reading isn’t set up yet. Demo for now.',
 };
 
 function corsHeaders(origin) {
@@ -121,7 +129,7 @@ export function validateBody(body) {
   gen.maxOutputTokens = Math.min(Number(gen.maxOutputTokens) || 2048, MAX_OUTPUT_TOKENS);
   if (gen.temperature !== undefined) gen.temperature = Math.max(0, Math.min(2, Number(gen.temperature) || 1));
   const clean = { contents, generationConfig: gen };
-  if (systemInstruction) clean.systemInstruction = systemInstruction;
+  if (systemInstruction) clean.systemInstruction = withVoice(systemInstruction);
   if (Array.isArray(safetySettings) && safetySettings.length <= 6) clean.safetySettings = safetySettings;
   return { body: clean };
 }

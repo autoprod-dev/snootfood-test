@@ -34,18 +34,19 @@ var CLIENT_PER_DAY = 40;
 
 var IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 var BODY_KEYS = ['contents', 'systemInstruction', 'generationConfig', 'safetySettings'];
+var VOICE_RULE = 'House voice (added by the relay, always applies): dry, deadpan and short, like a judgy friend. Any verdict or headline is 2-6 words and names something actually visible or listed. Good and fix lines are 8 words max. No puns, no fake French, no emoji, no exclamation marks.';
 var GEN_KEYS = ['responseMimeType', 'responseSchema', 'temperature', 'maxOutputTokens', 'topP', 'topK'];
 
 var MESSAGES = {
-  quota: 'The kitchen’s slammed (we’ve hit the limit for now). Give it a minute, or grab a demo result.',
-  quota_day: 'That’s the daily limit for real photo reading. Come back tomorrow, or grab a demo result.',
-  too_big: 'That photo’s too big to send. Try a smaller one.',
-  bad_request: 'That request looked a little scrambled. Try again.',
-  forbidden: 'This kitchen only takes orders from the Snootfood app.',
-  upstream: 'The AI is having a moment. Try again in a sec.',
-  upstream_auth: 'The kitchen’s AI key isn’t working right now. Grab a demo result for now.',
-  upstream_blocked: 'Chef’s passing on that one. Try a different photo.',
-  not_configured: 'Real photo reading isn’t set up yet. Grab a demo result for now.'
+  quota: 'Busy kitchen. Try again in a minute.',
+  quota_day: 'Real reads hit the daily limit. Back tomorrow.',
+  too_big: 'Photo’s too big. Try a smaller one.',
+  bad_request: 'Scrambled request. Try again.',
+  forbidden: 'This kitchen only serves Snootfood.',
+  upstream: 'The AI is having a moment. Try again.',
+  upstream_auth: 'Kitchen key isn’t working. Demo for now.',
+  upstream_blocked: 'Chef passed on that one. Different photo.',
+  not_configured: 'Photo reading isn’t set up yet. Demo for now.'
 };
 
 function reply_(obj) {
@@ -151,9 +152,21 @@ function validate_(body) {
   if (gen.temperature !== undefined) gen.temperature = Math.max(0, Math.min(2, Number(gen.temperature) || 1));
 
   var clean = { contents: contents, generationConfig: gen };
-  if (body.systemInstruction) clean.systemInstruction = body.systemInstruction;
+  if (body.systemInstruction) clean.systemInstruction = withVoice_(body.systemInstruction);
   if (Array.isArray(body.safetySettings) && body.safetySettings.length <= 6) clean.safetySettings = body.safetySettings;
   return { body: clean };
+}
+
+/**
+ * Appends the house voice to every copy-writing request. Fridge scans (the
+ * inventory prompt) are about accuracy, so they are left alone.
+ */
+function withVoice_(sys) {
+  var parts = (sys && sys.parts) || [];
+  var text = '';
+  for (var i = 0; i < parts.length; i++) text += (parts[i] && parts[i].text) || '';
+  if (/inventory assistant/i.test(text) || text.indexOf('House voice (added by the relay') >= 0) return sys;
+  return { parts: parts.concat([{ text: VOICE_RULE }]) };
 }
 
 /**

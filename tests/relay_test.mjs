@@ -38,6 +38,7 @@ const call = async (r) => { const res = await worker.fetch(r, env); return { sta
 let r = await call(req(GH, goodBody()));
 check('worker: happy path 200 + CORS for test origin', r.status === 200 && r.cors === GH.Origin && r.body.candidates);
 check('worker: key added server-side via header, not URL', upstreamCalls[0].key === 'SECRET-KEY' && !upstreamCalls[0].url.includes('SECRET'));
+check('worker: house voice appended to the system instruction', upstreamCalls[0].body.systemInstruction.parts.length === 2 && /2-6 words/.test(upstreamCalls[0].body.systemInstruction.parts[1].text));
 r = await call(req({ Origin: 'https://evil.com' }, goodBody()));
 check('worker: bad origin → 403 friendly JSON', r.status === 403 && r.body.error.code === 'bad_origin' && !r.cors);
 r = await call(req(GH, goodBody(), '/v1beta/models/gemini-3.1-pro-preview:generateContent'));
@@ -97,6 +98,15 @@ check('gas: happy path ok:true with Gemini data', r.ok === true && r.data.candid
 check('gas: old clients asking for gemini-2.5-flash are mapped to the primary', gasSandbox().post(msg({ model: 'gemini-2.5-flash' })).model === 'gemini-flash-latest');
 check('gas: key sent as header from Script Properties, not in URL', g.fetches[0].opt.headers['x-goog-api-key'] === 'SECRET-KEY' && !g.fetches[0].url.includes('SECRET'));
 check('gas: output tokens capped', JSON.parse(g.fetches[0].opt.payload).generationConfig.maxOutputTokens === 4096);
+{
+  const sys = JSON.parse(g.fetches[0].opt.payload).systemInstruction.parts;
+  check('gas: house voice appended to copy requests (2–6 word verdict, no puns)', sys.length === 2 && sys[0].text === 'sys' && /2-6 words/.test(sys[1].text) && /No puns/.test(sys[1].text));
+  const g2 = gasSandbox();
+  g2.post(msg({ request: { ...goodBody(), systemInstruction: { parts: [{ text: 'You are a careful kitchen inventory assistant' }] } } }));
+  check('gas: fridge scan prompt left untouched (no voice rule)', JSON.parse(g2.fetches[0].opt.payload).systemInstruction.parts.length === 1);
+  const cs = fs.readFileSync(new URL('../relay-gas/Code.gs', import.meta.url), 'utf8');
+  check('gas: server caps unchanged (8/min, 200/day, 4/min, 40/day per client)', /GLOBAL_PER_MIN = 8;/.test(cs) && /GLOBAL_PER_DAY = 200;/.test(cs) && /CLIENT_PER_MIN = 4;/.test(cs) && /CLIENT_PER_DAY = 40;/.test(cs));
+}
 check('gas: doGet health reveals nothing secret', !g.sb.doGet().text.includes('SECRET') && JSON.parse(g.sb.doGet().text).configured === true);
 check('gas: bad JSON → bad_request', g.post('not json').error.code === 'bad_request');
 check('gas: non-allowlisted model → bad_request', g.post(msg({ model: 'gemini-3.1-pro-preview' })).error.code === 'bad_request');

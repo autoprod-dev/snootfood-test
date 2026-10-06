@@ -2,11 +2,11 @@
 import { APP } from './config.js';
 
 export const THEMES = [
-  'Toast, but make it fancy', 'Leftovers glow-up', 'Beige food day', 'Breakfast for dinner', 'The sad desk lunch',
-  'Something green (yes, really)', 'Two-minute noodles', 'The fridge’s last stand', 'Snack plate supreme', 'Something on a stick',
-  'Midnight snack', 'Sandwich architecture', 'Soup weather', 'Pasta, obviously', 'Anything with cheese on top',
+  'Toast, priced like rent', 'Leftovers glow-up', 'Beige food day', 'Breakfast for dinner', 'The sad desk lunch',
+  'Something green. Really.', 'Two-minute noodles', 'The fridge’s last stand', 'Snack plate supreme', 'Something on a stick',
+  'Midnight snack', 'A sandwich, structurally', 'Soup weather', 'Pasta. Obviously.', 'Anything with cheese on top',
   'The gas station gourmet', 'Brunch at home', 'Taco night', 'One-pan wonder', 'Dessert first',
-  'Mystery leftovers', 'Pizza, any pizza', 'Salad that tries its best', 'Cereal as a meal', 'Grandma’s recipe',
+  'Mystery leftovers', 'Pizza, any pizza', 'A salad, trying', 'Cereal as a meal', 'Grandma’s recipe',
   'Food truck energy', 'Microwave masterpiece', 'Eggs, your way', 'Something spicy', 'The packed lunch',
   'Rice bowl roulette', 'Fancy drink, plain glass', 'Game day snacks', 'Bake sale reject', 'Whatever’s in the freezer',
 ];
